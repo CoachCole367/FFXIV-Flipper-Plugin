@@ -3,6 +3,8 @@ using System.Net;
 using System.Text.Json;
 
 Console.WriteLine($"{await BatchRegression.Run()} batch/pipeline regressions passed.");
+Console.WriteLine($"{await DiscoveryRegression.Run()} discovery/sorting checks passed.");
+if (args.Contains("--discovery-live")) await LiveDiscovery.Run();
 var checks = 0;
 void Check(bool ok, string name) { if (!ok) throw new Exception(name); checks++; }
 void Throws(Action action, string name) { try { action(); } catch (ArgumentException) { checks++; return; } catch (InvalidDataException) { checks++; return; } throw new Exception(name); }

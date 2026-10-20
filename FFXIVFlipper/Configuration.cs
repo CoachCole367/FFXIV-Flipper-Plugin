@@ -3,6 +3,11 @@ namespace FFXIVFlipper;
 [Serializable]
 public sealed class Configuration : IPluginConfiguration
 {
+    public CandidateSource CandidateSource { get; set; } = CandidateSource.Balanced;
+    public List<SavedWatchlist> Watchlists { get; set; } = [new()];
+    public int ActiveWatchlist { get; set; }
+    public uint SweepCategory { get; set; }
+    public int SweepCursor { get; set; }
     public int Version { get; set; } = 1;
     public bool TrackPurchases { get; set; } = true;
     public string SellWorld { get; set; } = "";

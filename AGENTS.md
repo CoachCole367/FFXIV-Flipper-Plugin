@@ -12,3 +12,5 @@
 - Purchase journal: 1,000 lots / 90 days / 512 KB; no snapshots, polling or growing backups. Log only matched confirmed purchases; sales stay actual manual entries. Keep character IDs and journal/export data local.
 
 - Scanner performance: batches of at most ten, max two HTTP requests, one prefetched batch, fresh interpreter per item. Cache only fixed prepared code; never retain batch payloads across scans. Multi-batch live check: dotnet run --project tests/Economics.Tests.csproj -c Release -- --scan-live-wide.
+
+- Discovery aggregates only select candidates; full history/model still decides trades. Eight watchlists max, 200 IDs each; no persisted aggregate payloads. Full live validation: dotnet run --project tests/Economics.Tests.csproj -c Release -- --discovery-live. Release staging: tools/package-release.ps1; never claim feed URLs work until public downloads are verified.

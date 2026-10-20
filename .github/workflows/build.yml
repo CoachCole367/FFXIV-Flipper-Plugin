@@ -1,0 +1,29 @@
+name: Build and validate
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Download official Dalamud reference distribution
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile "$env:RUNNER_TEMP/dalamud.zip"
+          Expand-Archive "$env:RUNNER_TEMP/dalamud.zip" -DestinationPath "$env:APPDATA/XIVLauncher/addon/Hooks/dev"
+      - name: Test, build and stage versioned package
+        shell: pwsh
+        run: ./tools/package-release.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FFXIVFlipper-release-candidate
+          path: dist/*
+          retention-days: 14

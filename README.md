@@ -36,7 +36,7 @@ Storage errors are displayed. A malformed, oversized or unsupported existing jou
 
 ## Model and limits
 
-Version 0.5.3 embeds the website's unchanged `scanner-strategy.js`, `scanner-planner.js` and `market-data.js` calculation modules using Jint 4.17.0. The two small helper exports are extracted from `api.js` and `scanner-history.js`. Only import names are normalized for the in-memory module loader. The structuredClone compatibility function handles the planner's JSON-compatible purchase-plan data. There is no script download, CLR exposure, website dependency or external JavaScript execution service.
+Version 0.6.0 embeds the website's unchanged `scanner-strategy.js`, `scanner-planner.js` and `market-data.js` calculation modules using Jint 4.17.0. The two small helper exports are extracted from `api.js` and `scanner-history.js`. Only import names are normalized for the in-memory module loader. The structuredClone compatibility function handles the planner's JSON-compatible purchase-plan data. There is no script download, CLR exposure, website dependency or external JavaScript execution service.
 
 The same demand distributions, recency/dispersion models, price-ladder competition, confidence taper, exit-price planning, full-stack purchasing, expected cash recovery, ranking and basket selection run off the game thread. New scans start without learned personal calibration, as does a fresh browser installation. Saved calibration/history learning, Smart Auto profile selection, crafting and vendor scanning are not ported yet.
 
@@ -85,8 +85,8 @@ dotnet run --project tests/Economics.Tests.csproj -- --scan-live
 ## Remaining work
 
 - Verify the redesigned 0.4.0 UI in a running game; profile in-game responsiveness.
-- Add saved watchlists and compatible learning/calibration; optional retainer-sale automation remains separate from the bounded purchase journal.
-- Expand candidate discovery and selective retries for unavailable data.
+- Add compatible learning/calibration; optional retainer-sale automation remains separate from the bounded purchase journal.
+- Consider selective retries for temporary API failures; keep the shared request limit and rate-limit cooldown.
 - Port crafting/vendor tools if desired.
 - Publish a tested release and installation feed.
 
@@ -105,3 +105,38 @@ Validation: all 131 checks passed, including 14 new batching/pipeline checks. Th
 Original performance experiments: [benchmark report](benchmarks/README.md). The benchmark engine remains a 0.5.2 reference snapshot.
 
 Optional multi-batch live check: dotnet run --project tests/Economics.Tests.csproj -c Release -- --scan-live-wide.
+
+## Version 0.6.0: sorting and broader discovery
+
+Both the opportunity and journal tables sort when you click a column title. Click again to reverse direction. Numerical columns sort numerically; unknown selling times stay last. Sorting preserves the selected trade, basket and journal record identity. Journal sorting covers all retained lots before pagination.
+
+Discovery sources:
+- Balanced discovery (default): interleaves the active saved watchlist, an active-market sweep and recent buy-DC updates.
+- Active market sweep: screens the next 1,000 marketable catalog IDs, starting with newer IDs and wrapping around. Up to 200 with a home-world sale within three days are ranked by observed home-world daily traded gil and checked using the full original model.
+- Saved watchlist: evaluates saved IDs directly, with no recent-update discovery dependency.
+- Recently updated: retains the original buy-DC list.
+
+The sweep category applies only to the active-market portion; it does not filter watchlists or recent updates in Balanced mode. The saved cursor advances when a sweep starts, including a canceled or failed sweep. Subsequent scans explore a different catalog slice. Inactive/unknown aggregates are excluded; aggregate statistics are shortlist signals, never forecasts or substitutes for raw history, full-stack costs or freshness/coverage checks.
+
+Use Manage watchlists to create up to eight named lists, search for items and remove entries. Each list holds up to 200 item IDs; no market payloads are saved. Save to watchlist in a trade's details adds that item to the currently selected list, with both qualities checked on the next scan.
+
+Validation for 0.6.0: 165 automated checks pass. Two full live scans each screened 1,000 IDs and evaluated 200 candidates. Balanced found 35 trades in 31.44s with 10 unavailable-item warnings; a different active-market slice found 8 in 27.67s with 21 warnings. Some batched requests encountered temporary upstream/network failures; affected items were explicitly skipped. These are different candidate sets and snapshot observations, not a source-quality comparison or a profit guarantee.
+
+The user verified a 200-item Balanced scan, both Upfront sort directions, restart/cancel and game responsiveness. The new layout and canceled state were inspected in game using the Computer Use skill. Journal reload/corruption/write-failure recovery is covered by automated tests; real purchase/sale event verification remains a separate manual check.
+
+## Releasing and updates
+
+Run tools/package-release.ps1 from PowerShell to test, build and stage:
+- dist/FFXIVFlipper-0.6.0.zip
+- its SHA-256 checksum
+- dist/repo.json, the Dalamud repository manifest.
+
+The package allowlist contains only the plugin DLL, manifest/dependency metadata, Jint/Acornima DLLs and license notices. It excludes config, journals, exports, raw market data, fixtures and website files. Generated artifacts are ignored by Git. Use -PublishRepository owner/name for a different hosting repository. The script does not publish or change visibility.
+
+The build workflow tests, builds and uploads a release-candidate artifact; it does not auto-publish. To publish, tag the matching source commit v0.6.0, create a GitHub release with the ZIP and checksum, and put the generated repo.json at the repository root. All feed and ZIP URLs must be accessible without authentication.
+
+Once published, add https://raw.githubusercontent.com/CoachCole367/FFXIV-Flipper-Plugin/main/repo.json in Dalamud Settings > Experimental > Custom Plugin Repositories. Remove/disable the development-plugin location before installing the release to avoid loading two copies. Existing plugin config and journal files stay in Dalamud's plugin config directory; release ZIPs never contain user data.
+
+Optional full discovery validation: dotnet run --project tests/Economics.Tests.csproj -c Release -- --discovery-live.
+
+Sources: https://docs.universalis.app/ and https://dalamud.dev/plugin-publishing/custom-repositories/.

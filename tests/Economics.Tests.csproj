@@ -3,7 +3,7 @@
  <ItemGroup>
  <Compile Include="../FFXIVFlipper/TradeJournal.cs" Link="TradeJournal.cs" /><Compile Include="../FFXIVFlipper/StackEconomics.cs" Link="StackEconomics.cs" />
  <Compile Include="../FFXIVFlipper/MarketAnalysis.cs" Link="MarketAnalysis.cs" />
- <Compile Include="../FFXIVFlipper/MarketClient.cs" Link="MarketClient.cs" />
+ <Compile Include="../FFXIVFlipper/TableSorting.cs" Link="TableSorting.cs" /><Compile Include="../FFXIVFlipper/CandidateDiscovery.cs" Link="CandidateDiscovery.cs" /><Compile Include="../FFXIVFlipper/MarketClient.cs" Link="MarketClient.cs" />
  </ItemGroup>
 <ItemGroup><PackageReference Include="Jint" Version="4.17.0" /><Compile Include="../FFXIVFlipper/CrossWorldScanner.cs" Link="CrossWorldScanner.cs" /><Compile Include="../FFXIVFlipper/PlannerEngine.cs" Link="PlannerEngine.cs" /><EmbeddedResource Include="../FFXIVFlipper/Model/*.js" Link="Model/%(Filename)%(Extension)" /><Content Include="Fixtures/*.json" CopyToOutputDirectory="PreserveNewest" /></ItemGroup></Project>
 

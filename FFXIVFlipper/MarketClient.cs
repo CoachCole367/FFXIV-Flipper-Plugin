@@ -14,7 +14,7 @@ public sealed class MarketClient : IDisposable
     {
         http = handler == null ? new() : new(handler);
         http.Timeout = TimeSpan.FromSeconds(25);
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("FFXIVFlipper/0.5.3");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("FFXIVFlipper/0.6.0");
     }
     public async Task<MarketSnapshot> Fetch(uint world, uint item, bool withHistory, CancellationToken token, int listingLimit = 100)
     {
@@ -174,6 +174,34 @@ public sealed class MarketClient : IDisposable
             (world != null && (!root.TryGetProperty("worldID", out var w) || !w.TryGetUInt32(out var actualWorld) || actualWorld != world)))
             throw new InvalidDataException($"Item {item}: response identity mismatch.");
         return root;
+    }
+    public async Task<uint[]> ActiveCandidates(uint homeWorld, uint[] candidates, int count, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        var scores = new List<(uint Id, double Score)>();
+        // Bounded chunks; two requests maximum through Get, with no aggregate cache.
+        var chunks = candidates.Where(x => x > 0).Distinct().Take(CandidateDiscovery.SweepSize).Chunk(100).ToArray();
+        for (var offset = 0; offset < chunks.Length; offset += 2)
+        {
+            var pair = chunks.Skip(offset).Take(2).ToArray();
+            var payloads = await Task.WhenAll(pair.Select(ids => Get($"aggregated/{homeWorld}/{string.Join(",", ids)}", token, false)));
+            for (var i = 0; i < payloads.Length; i++)
+            {
+                using var doc = JsonDocument.Parse(payloads[i]);
+                if (!doc.RootElement.TryGetProperty("results", out var rows) || rows.ValueKind != JsonValueKind.Array)
+                    throw new InvalidDataException("Market activity data unavailable.");
+                var allowed = pair[i].ToHashSet();
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                foreach (var row in rows.EnumerateArray())
+                {
+                    if (!row.TryGetProperty("itemId", out var id) || !id.TryGetUInt32(out var value) || !allowed.Contains(value))
+                        throw new InvalidDataException("Market activity response contains an unexpected item.");
+                    var score = CandidateDiscovery.ActivityScore(row, now);
+                    if (score > 0) scores.Add((value, score));
+                }
+            }
+        }
+        return scores.OrderByDescending(x => x.Score).ThenBy(x => x.Id).Select(x => x.Id).Distinct().Take(count).ToArray();
     }
     public void Dispose() => http.Dispose();
 }
