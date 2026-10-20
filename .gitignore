@@ -7,3 +7,13 @@ obj/
 purchase-journal*
 
 dist/
+
+# Local credentials and private signing material must never be committed.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+.test-temp/

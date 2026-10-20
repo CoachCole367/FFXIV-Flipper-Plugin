@@ -63,3 +63,9 @@ The GitHub workflow builds a release-candidate artifact; it does not auto-publis
 The custom installation/update feed is linked in the README. Disable the dev entry before installing a release to avoid two loaded copies. Do not delete plugin configuration during migration.
 
 Jint/Acornima notices are in [licenses](../licenses). See [Universalis documentation](https://docs.universalis.app/) and [Dalamud custom repositories](https://dalamud.dev/plugin-publishing/custom-repositories/). This custom release is not an official Dalamud repository submission.
+
+## Publishing privacy
+
+Use a GitHub-provided noreply address for Git author and committer emails before committing. Existing public commit metadata requires a coordinated history rewrite to remove. GitHub ownership and required installation/update URLs remain public.
+
+Local environment files and private key files are ignored. Never place credentials in tracked files. Release packages exclude journals, exports, configuration, debug symbols and raw market data; compiler source references use a neutral path. Keep third-party copyright notices intact.

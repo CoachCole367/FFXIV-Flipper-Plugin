@@ -9,6 +9,8 @@
     <Tags>market;economy;crafting</Tags>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Keep local checkout paths out of compiled source references. -->
+    <PathMap>$(MSBuildProjectDirectory)=/_/FFXIVFlipper</PathMap>
   </PropertyGroup>
 <ItemGroup><PackageReference Include="Jint" Version="4.17.0" /><EmbeddedResource Include="Model\*.js" /><Content Include="..\licenses\*.txt" Link="licenses\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" /></ItemGroup></Project>
 
