@@ -22,7 +22,7 @@ Install future updates through the Dalamud plugin installer. If you previously u
 ## Typical daily use
 
 1. Open `/fflipper`. Choose your sell world, buy data center, available gil, and minimum expected gain.
-2. Select **Balanced discovery**, then click **Scan for flips**. Use a saved watchlist for familiar items or **Active market sweep** to explore more.
+2. Click **Scan for flips**. Open **Scan settings** to change search mode, categories, item count, or filters. Watchlists are temporarily paused; saved lists are kept.
 3. Review expected gain, upfront cost, and selling time. Click column headings to sort and select a trade to see the exact stacks to buy. Only the suggested basket fits the combined budget.
 4. Click an item name to copy it for a market-board search. Verify the listings in game, then travel and buy manually. **Sell / unit** is the suggested listing price on your sell world.
 5. Purchase tracking is **on by default**; check **Automatically log market-board purchases** in **Purchase journal** before buying if you previously disabled it. After selling, select the purchase and enter the units sold and total gil received after seller tax. Sales must be recorded manually.

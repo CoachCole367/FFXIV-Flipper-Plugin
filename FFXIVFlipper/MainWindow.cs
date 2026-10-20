@@ -29,7 +29,6 @@ public sealed class MainWindow : Window, IDisposable
     private CandidateSource source;
     private uint[]? sweepCatalog;
     private (uint Id, string Name)[]? categories;
-    private string watchlistSearch = "", newWatchlistName = "", watchlistMessage = "";
     private int opportunitySortColumn = 4, journalSortColumn;
     private bool opportunityDescending = true, journalDescending = true, journalSortDirty = true;
     private int[]? opportunityOrder;
@@ -60,7 +59,8 @@ public sealed class MainWindow : Window, IDisposable
         config.Watchlists = CandidateDiscovery.Normalize(config.Watchlists);
         if (config.Watchlists.Count == 0) config.Watchlists.Add(new());
         config.ActiveWatchlist = Math.Clamp(config.ActiveWatchlist, 0, config.Watchlists.Count - 1);
-        source = Enum.IsDefined(config.CandidateSource) ? config.CandidateSource : CandidateSource.Balanced;
+        source = config.CandidateSource is CandidateSource.ActiveMarket or CandidateSource.RecentUpdates
+            ? config.CandidateSource : CandidateSource.Balanced;
         sellWorld = config.SellWorld;
         scanDc = config.ScanDc; budget = config.Budget; scanItems = config.ScanItems; holdingDays = config.HoldingDays;
         maxQuantity = config.MaxQuantity; confidence = config.ConfidencePercent; minProfit = config.MinProfit; minExpectedProfit = config.MinExpectedProfit;
@@ -115,16 +115,13 @@ public sealed class MainWindow : Window, IDisposable
             catch (Exception ex) { scanStatus = $"Scan failed: {ex.Message}"; Plugin.Log.Warning(ex, "Cross-world scan failed"); }
             scanTask = null;
         }
-        ImGui.TextUnformatted("MARKET SCANNER");
-        ImGui.TextDisabled("Find worthwhile purchases elsewhere to sell on your home world.");
-        ImGui.Spacing();
         var home = Plugin.Data.GetExcelSheet<World>().FirstOrDefault(x => x.Name.ToString() == sellWorld);
-        if (ImGui.BeginTable("Scan controls", 3, ImGuiTableFlags.SizingStretchSame))
+        if (ImGui.BeginTable("Scan controls", 4, ImGuiTableFlags.SizingStretchSame))
         {
-            ImGui.TableNextColumn(); FieldLabel("Sell on");
+            ImGui.TableNextColumn(); FieldLabel("Sell world");
             if (DrawWorld("##ScanHome", ref sellWorld)) { InvalidateScan(); scanDc = ""; }
             home = Plugin.Data.GetExcelSheet<World>().FirstOrDefault(x => x.Name.ToString() == sellWorld);
-            ImGui.TableNextColumn(); FieldLabel("Buy in data center");
+            ImGui.TableNextColumn(); FieldLabel("Buy data center");
             var dcs = home.RowId == 0 ? [] : Plugin.Data.GetExcelSheet<World>()
                 .Where(x => x.IsPublic && x.DataCenter.IsValid && x.DataCenter.Value.Region.RowId == home.DataCenter.Value.Region.RowId)
                 .Select(x => x.DataCenter.Value.Name.ToString()).Distinct().Order().ToArray();
@@ -135,34 +132,35 @@ public sealed class MainWindow : Window, IDisposable
                 ImGui.EndCombo();
             }
             ImGui.TableNextColumn(); FieldLabel("Available gil");
-            if (ImGui.InputInt("##Budget", ref budget, 10000, 100000)) InvalidateScan();
-            ImGui.TableNextColumn(); FieldLabel("Items to check");
-            if (ImGui.InputInt("##ScanCount", ref scanItems, 25, 50)) InvalidateScan();
-            Hint("Maximum number of candidates to evaluate in detail. Discovery source is selected below.");
-            ImGui.TableNextColumn(); FieldLabel("Minimum expected gain / trade");
-            if (ImGui.InputInt("##MinExpectedGain", ref minExpectedProfit, 5000, 10000)) InvalidateScan();
+            if (ImGui.InputInt("##Budget", ref budget, 0, 0)) InvalidateScan();
+            ImGui.TableNextColumn(); FieldLabel("Minimum gain / trade");
+            if (ImGui.InputInt("##MinExpectedGain", ref minExpectedProfit, 0, 0)) InvalidateScan();
             Hint("Total expected cash gain after the full stack cost and assumed seller tax. Applied before the budget basket is chosen.");
-            ImGui.TableNextColumn(); FieldLabel(" ");
-            var valid = ValidScan(home.RowId);
-            ImGui.BeginDisabled(!valid || scanTask != null);
-            var start = ImGui.Button("Scan for flips", new Vector2(ImGui.GetContentRegionAvail().X, 0));
-            ImGui.EndDisabled();
-            if (start) StartScan(home.RowId);
             ImGui.EndTable();
         }
-        DrawDiscovery();
-        if (ImGui.CollapsingHeader("Filters & scan options"))
+        ImGui.Spacing();
+        ImGui.BeginDisabled(!ValidScan(home.RowId) || scanTask != null);
+        var start = ImGui.Button("Scan for flips", new Vector2(160, 0));
+        ImGui.EndDisabled();
+        if (start) StartScan(home.RowId);
+        ImGui.SameLine();
+        ImGui.TextDisabled($"{scanItems} items  |  {holdingDays} day window  |  {confidence}% minimum sell chance");
+        ImGui.Spacing();
+        if (ImGui.CollapsingHeader("Scan settings##CompactScanSettings"))
         {
+            DrawDiscovery();
             if (ImGui.BeginTable("Extra scan controls", 3, ImGuiTableFlags.SizingStretchSame))
             {
+                ImGui.TableNextColumn(); FieldLabel("Items to check (1-200)");
+                if (ImGui.InputInt("##ScanCount", ref scanItems, 0, 0)) InvalidateScan();
                 ImGui.TableNextColumn(); FieldLabel("Sell within days (1-7)");
-                if (ImGui.InputInt("##HoldDays", ref holdingDays)) { InvalidateScan(); }
+                if (ImGui.InputInt("##HoldDays", ref holdingDays, 0, 0)) { InvalidateScan(); }
                 ImGui.TableNextColumn(); FieldLabel("Minimum sell chance % (1-99)");
-                if (ImGui.InputInt("##Confidence", ref confidence, 5, 10)) InvalidateScan();
+                if (ImGui.InputInt("##Confidence", ref confidence, 0, 0)) InvalidateScan();
                 ImGui.TableNextColumn(); FieldLabel("Planned resale units (1-100)");
-                if (ImGui.InputInt("##MaxQty", ref maxQuantity)) InvalidateScan();
+                if (ImGui.InputInt("##MaxQty", ref maxQuantity, 0, 0)) InvalidateScan();
                 ImGui.TableNextColumn(); FieldLabel("Minimum margin / planned unit");
-                if (ImGui.InputInt("##MinUnitMargin", ref minProfit, 500, 1000)) InvalidateScan();
+                if (ImGui.InputInt("##MinUnitMargin", ref minProfit, 0, 0)) InvalidateScan();
                 ImGui.EndTable();
             }
             ImGui.TextDisabled("HQ and NQ checked separately. Minimum ROI 4%. DC travel access may vary.");
@@ -205,29 +203,23 @@ public sealed class MainWindow : Window, IDisposable
         InvalidateScan(); config.CandidateSource = source;
         Plugin.PluginInterface.SavePluginConfig(config);
     }
-    private void AddWatchlistItem(uint id)
-    {
-        var list = config.Watchlists[config.ActiveWatchlist];
-        if (list.Items.Contains(id)) { watchlistMessage = "Already in " + list.Name; return; }
-        if (list.Items.Count >= CandidateDiscovery.MaxWatchlistItems) { watchlistMessage = "List full (200 items)."; return; }
-        list.Items.Add(id); watchlistMessage = "Saved to " + list.Name; Plugin.PluginInterface.SavePluginConfig(config);
-    }
     private void DrawDiscovery()
     {
-        if (ImGui.BeginTable("Candidate controls", 3, ImGuiTableFlags.SizingStretchSame))
+        if (ImGui.BeginTable("Candidate controls", 2, ImGuiTableFlags.SizingStretchSame))
         {
-            ImGui.TableNextColumn(); FieldLabel("Scan source");
-            string Label(CandidateSource value) => value switch { CandidateSource.Balanced => "Balanced discovery", CandidateSource.ActiveMarket => "Active market sweep", CandidateSource.Watchlist => "Saved watchlist", _ => "Recently updated" };
+            ImGui.TableNextColumn(); FieldLabel("Search mode");
+            string Label(CandidateSource value) => value switch { CandidateSource.Balanced => "Balanced discovery", CandidateSource.ActiveMarket => "Active market sweep", _ => "Recently updated" };
             if (ImGui.BeginCombo("##CandidateSource", Label(source)))
             {
-                foreach (var value in Enum.GetValues<CandidateSource>())
+                foreach (var value in new[] { CandidateSource.Balanced, CandidateSource.ActiveMarket, CandidateSource.RecentUpdates })
                     if (ImGui.Selectable(Label(value), source == value)) { source = value; SaveDiscovery(); }
                 ImGui.EndCombo();
             }
-            ImGui.TableNextColumn(); FieldLabel("Sweep category");
+            Hint("Balanced combines active markets and recent updates. Watchlists are paused; saved lists are kept.");
+            ImGui.TableNextColumn(); FieldLabel("Item category");
             categories ??= Plugin.Data.GetExcelSheet<ItemSearchCategory>().Where(x => x.RowId != 0 && !string.IsNullOrWhiteSpace(x.Name.ToString()))
                 .Select(x => (x.RowId, x.Name.ToString())).OrderBy(x => x.Item2).Prepend((0u, "All marketable items")).ToArray();
-            ImGui.BeginDisabled(source is CandidateSource.Watchlist or CandidateSource.RecentUpdates);
+            ImGui.BeginDisabled(source == CandidateSource.RecentUpdates);
             if (ImGui.BeginCombo("##SweepCategory", categories.FirstOrDefault(x => x.Id == config.SweepCategory).Name ?? "All marketable items"))
             {
                 foreach (var category in categories)
@@ -236,59 +228,9 @@ public sealed class MainWindow : Window, IDisposable
                 ImGui.EndCombo();
             }
             ImGui.EndDisabled();
-            ImGui.TableNextColumn(); FieldLabel("Saved watchlist");
-            if (ImGui.BeginCombo("##ActiveWatchlist", config.Watchlists[config.ActiveWatchlist].Name))
-            {
-                for (var i = 0; i < config.Watchlists.Count; i++)
-                    if (ImGui.Selectable(config.Watchlists[i].Name + "##list" + i, i == config.ActiveWatchlist))
-                    { config.ActiveWatchlist = i; watchlistSearch = ""; SaveDiscovery(); }
-                ImGui.EndCombo();
-            }
+            Hint("Category applies to the active-market sweep; recent updates can include other categories.");
             ImGui.EndTable();
         }
-        ImGui.TextDisabled(source switch
-        {
-            CandidateSource.Watchlist => "Checks saved items directly. HQ and NQ are evaluated separately.",
-            CandidateSource.ActiveMarket => "Screens the next 1,000 catalog items for recent home-world sales, then checks the most active candidates in detail.",
-            CandidateSource.RecentUpdates => "Checks up to 200 recently updated items on the buy data center.",
-            _ => "Mixes your saved list, a rotating active-market sweep and recent buy-DC updates."
-        });
-        if (source is CandidateSource.ActiveMarket or CandidateSource.Balanced)
-            ImGui.TextDisabled($"Next catalog position: {config.SweepCursor:N0}. Each scan advances; activity is a shortlist signal, not a profit forecast.");
-        if (!ImGui.CollapsingHeader("Manage watchlists")) return;
-        ImGui.InputText("New list name", ref newWatchlistName, 40);
-        ImGui.SameLine();
-        ImGui.BeginDisabled(config.Watchlists.Count >= CandidateDiscovery.MaxLists || string.IsNullOrWhiteSpace(newWatchlistName));
-        if (ImGui.SmallButton("Create list"))
-        {
-            config.Watchlists.Add(new() { Name = newWatchlistName.Trim() }); config.ActiveWatchlist = config.Watchlists.Count - 1;
-            newWatchlistName = ""; SaveDiscovery();
-        }
-        ImGui.EndDisabled();
-        ImGui.InputText("Find item to add", ref watchlistSearch, 80);
-        if (watchlistSearch.Trim().Length >= 2)
-        {
-            itemCatalog ??= Plugin.Data.GetExcelSheet<Item>().Where(x => x.ItemSearchCategory.RowId != 0).ToDictionary(x => x.RowId, x => x.Name.ToString());
-            foreach (var item in itemCatalog.Where(x => x.Value.Contains(watchlistSearch.Trim(), StringComparison.OrdinalIgnoreCase)).Take(8).ToArray())
-                if (ImGui.Selectable(item.Value + "##watchAdd" + item.Key)) { AddWatchlistItem(item.Key); watchlistSearch = ""; break; }
-        }
-        var list = config.Watchlists[config.ActiveWatchlist];
-        ImGui.TextDisabled($"{list.Name}: {list.Items.Count}/200 items. Up to 8 lists; only item IDs are saved.");
-        if (!string.IsNullOrEmpty(watchlistMessage)) ImGui.TextWrapped(watchlistMessage);
-        if (ImGui.BeginChild("Watchlist items", new Vector2(0, 110), true))
-        {
-            foreach (var id in list.Items.ToArray())
-            {
-                ImGui.PushID((int)id);
-                if (ImGui.SmallButton("Remove")) { list.Items.Remove(id); SaveDiscovery(); }
-                ImGui.SameLine(); ImGui.TextUnformatted(Plugin.Data.GetExcelSheet<Item>().TryGetRow(id, out var item) ? item.Name.ToString() : $"Item {id}");
-                ImGui.PopID();
-            }
-        }
-        ImGui.EndChild();
-        ImGui.BeginDisabled(config.Watchlists.Count <= 1 || list.Items.Count > 0);
-        if (ImGui.SmallButton("Delete empty list")) { config.Watchlists.RemoveAt(config.ActiveWatchlist); config.ActiveWatchlist = 0; SaveDiscovery(); }
-        ImGui.EndDisabled();
     }
     private bool ValidScan(uint homeId) => homeId != 0 && budget > 0 && scanItems is >= 1 and <= 200
         && holdingDays is >= 1 and <= 7 && confidence is >= 1 and <= 99 && maxQuantity is >= 1 and <= 100
@@ -307,7 +249,7 @@ public sealed class MainWindow : Window, IDisposable
         scanCancellation = new(); var token = scanCancellation.Token; var runId = scanRunId;
         var sweep = GetSweepCatalog();
         var request = new DiscoveryRequest(source, homeId, scanDc, scanItems,
-            config.Watchlists[config.ActiveWatchlist].Items.Where(catalog.ContainsKey).ToArray(),
+            [], // Watchlists are paused; saved lists remain in configuration.
             CandidateDiscovery.Sweep(sweep, config.SweepCursor));
         if (source is CandidateSource.ActiveMarket or CandidateSource.Balanced)
             config.SweepCursor = sweep.Length == 0 ? 0 : (Math.Max(0, config.SweepCursor) % sweep.Length + request.Sweep.Length) % sweep.Length;
@@ -318,9 +260,7 @@ public sealed class MainWindow : Window, IDisposable
         {
             var ids = await CandidateDiscovery.Find(market, request, token);
             var candidates = ids.Where(catalog.ContainsKey).Select(id => new ScanItem(id, catalog[id])).ToArray();
-            if (candidates.Length == 0) throw new InvalidDataException(request.Source == CandidateSource.Watchlist
-                ? "This watchlist has no marketable items. Add items before scanning."
-                : "No active candidates found in this catalog slice. Scan again for the next slice, or change category/source.");
+            if (candidates.Length == 0) throw new InvalidDataException("No active candidates found in this catalog slice. Scan again for the next slice, or change category/search mode.");
             return await new CrossWorldScanner(market).Run(settings, catalog, candidates,
                 p => { if (Volatile.Read(ref scanRunId) == runId) scanProgress = p; }, token);
         }, token);
@@ -396,8 +336,6 @@ public sealed class MainWindow : Window, IDisposable
     {
         if (ImGui.SmallButton(Text(row,"itemName") + "##copyTradeName")) CopyMarketName((uint)Number(row,"id"));
         Hint("Copy item name for market-board search (without the HQ/NQ suffix).");
-        ImGui.SameLine();
-        if (ImGui.SmallButton("Save to watchlist")) AddWatchlistItem((uint)Number(row, "id"));
         ImGui.TextUnformatted($"Buy on {Text(row,"buyWorld")}  ->  Sell on {sellWorld} at {Number(row,"targetSell"):N0} gil / unit");
         ImGui.Separator();
         ImGui.TextWrapped($"Purchase {Number(row,"purchasedQty"):N0} units for {Number(row,"planCost"):N0} gil. Plan to sell {Number(row,"recommendedQty"):N0}; expected sales {Number(row,"expectedUnitsSoldAtRecommended"):N1} units.");

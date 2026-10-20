@@ -8,16 +8,15 @@ The scanner evaluates HQ and NQ separately. Each scan checks at most 200 candida
 
 | Source | Items it checks |
 | --- | --- |
-| Balanced discovery | Interleaves the active watchlist, an active-market sweep and recent buy-DC updates. |
+| Balanced discovery | Interleaves an active-market sweep and recent buy-DC updates. |
 | Active market sweep | Screens the next 1,000 marketable catalog IDs, then checks the most active candidates on your home world. |
-| Saved watchlist | Checks saved item IDs directly, without relying on recent updates. |
 | Recently updated | Checks the latest buy-DC items returned by Universalis. |
 
 Active sweeps start with newer catalog IDs and wrap around. Candidates need an observed home-world sale within three days; ranking uses home-world daily traded gil. The saved position advances when a scan starts, including canceled or failed scans. Changing category resets it. The category applies only to the active-market portion of Balanced discovery.
 
 Aggregate activity only selects candidates. Every recommendation still requires the original full demand model, raw home-world history, freshness checks and whole-stack purchase planning. No activity or missing evidence is not a forecast of zero demand.
 
-Manage watchlists supports eight named lists, each with up to 200 item IDs. Search for an item there, or use Save to watchlist in a trade's details. Both qualities are checked on the next scan. No market snapshots are saved.
+The compact scanner keeps sell world, buy data center, available gil and minimum gain visible. Search mode, category and remaining filters are under the collapsed **Scan settings** section. Watchlist management, save buttons and watchlist-only scanning are temporarily paused. Saved lists remain in configuration but are excluded from scans; an old watchlist-only selection falls back to Balanced discovery.
 
 ## Reading results
 

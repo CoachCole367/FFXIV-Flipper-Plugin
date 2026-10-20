@@ -1,3 +1,10 @@
+# Unreleased
+
+- Compact scanner: four main fields, a scan button and one collapsed settings section.
+- Pause watchlist UI and scan inputs while retaining saved lists for future work.
+- Preserve opportunity tables, basket summaries and trade details apart from removing the watchlist save button.
+- In-game visual verification of this layout is pending.
+
 # 0.6.1
 
 - Stream market responses with a 16 MiB size limit and a timeout covering body reads; reject oversized evidence without caching it.
