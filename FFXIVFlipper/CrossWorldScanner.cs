@@ -1,9 +1,9 @@
 using System.Text.Json;
 namespace FFXIVFlipper;
 public sealed record ScanItem(uint Id, string Name);
-public sealed record ScanSettings(uint HomeId, string HomeWorld, string BuyDc, Dictionary<uint,string> BuyWorlds, int Budget, int ItemLimit, int HoldingDays, double Confidence, int MaxQuantity, int MinProfit);
+public sealed record ScanSettings(uint HomeId, string HomeWorld, string BuyDc, Dictionary<uint,string> BuyWorlds, int Budget, int ItemLimit, int HoldingDays, double Confidence, int MaxQuantity, int MinProfit, int MinExpectedProfit = 10000);
 public sealed record ScanProgress(int Completed, int Total, string Message);
-public sealed record ScanResult(JsonElement[] Rows, JsonElement Basket, int Evaluated, string[] Warnings, long FinishedAt);
+public sealed record ScanResult(JsonElement[] Rows, JsonElement Basket, int Evaluated, string[] Warnings, long FinishedAt, int LowValueFiltered = 0);
 public sealed class CrossWorldScanner(MarketClient market)
 {
     public async Task<ScanResult> Run(ScanSettings settings, IReadOnlyDictionary<uint,string> catalog, ScanItem[] manual, Action<ScanProgress> progress, CancellationToken token)
@@ -60,7 +60,8 @@ public sealed class CrossWorldScanner(MarketClient market)
             finally { evaluated++; }
         }
         token.ThrowIfCancellationRequested();
-        var rows = allRows.OrderByDescending(x => x.GetProperty("riskAdjusted").GetDouble()).ToArray();
+        var rows = SelectWorthwhile(allRows, settings.MinExpectedProfit);
+        var lowValueFiltered = allRows.Count - rows.Length;
         using var basketEngine = new PlannerEngine(token);
         JsonElement basket;
         try
@@ -74,8 +75,15 @@ public sealed class CrossWorldScanner(MarketClient market)
             basket = JsonSerializer.SerializeToElement(new { unavailable = true });
         }
         progress(new(evaluated, items.Length, "Scan complete"));
-        return new(rows, basket, evaluated, warnings.ToArray(), DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        return new(rows, basket, evaluated, warnings.ToArray(), DateTimeOffset.UtcNow.ToUnixTimeSeconds(), lowValueFiltered);
     }
+    // This user preference filters actionable trades, not the preserved demand calculation.
+    // Apply it before basket selection so tiny trades cannot consume basket slots.
+    public static JsonElement[] SelectWorthwhile(IEnumerable<JsonElement> rows, int minimumExpectedGain) => rows
+        .Where(row => row.TryGetProperty("planExpectedProfit", out var gain) && gain.ValueKind == JsonValueKind.Number
+            && double.IsFinite(gain.GetDouble()) && gain.GetDouble() > 0 && gain.GetDouble() >= Math.Max(0, minimumExpectedGain))
+        .OrderByDescending(row => row.GetProperty("planExpectedProfit").GetDouble())
+        .ThenByDescending(row => row.GetProperty("sellProbAtRecommended").GetDouble()).ToArray();
     private static object WorldData(string world, MarketSnapshot snapshot) => new {
         lastUpdatedSec = snapshot.LastUploadTime > 0 ? (double?)snapshot.LastUploadTime / 1000 : null,
         sampleLimited = snapshot.SampleLimited,
@@ -84,6 +92,8 @@ public sealed class CrossWorldScanner(MarketClient market)
             listingId = l.ListingId, worldName = world })
     };
 }
+
+
 
 
 

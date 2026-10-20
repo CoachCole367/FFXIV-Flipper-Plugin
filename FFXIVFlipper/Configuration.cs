@@ -14,5 +14,7 @@ public sealed class Configuration : IPluginConfiguration
     public int MaxQuantity { get; set; } = 20;
     public int ConfidencePercent { get; set; } = 70;
     public int MinProfit { get; set; } = 1000;
+    public int MinExpectedProfit { get; set; } = 10000;
 }
+
 

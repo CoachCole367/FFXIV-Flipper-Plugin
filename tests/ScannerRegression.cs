@@ -21,6 +21,22 @@ public static class ScannerRegression
         var history=JsonSerializer.Serialize(new {worldID=64,itemID=id,entries=sales});
         var settings=new ScanSettings(64,"Leviathan","Primal",worlds,1000000,5,2,.58,20,10);
         var catalog=new Dictionary<uint,string> { [id]="Synthetic test item" };
+        using var tradeExamples = JsonDocument.Parse("""
+          [{"id":1,"planExpectedProfit":726,"sellProbAtRecommended":0.9},
+           {"id":2,"planExpectedProfit":2647,"sellProbAtRecommended":0.9},
+           {"id":3,"planExpectedProfit":10000,"sellProbAtRecommended":0.8},
+           {"id":4,"planExpectedProfit":20000,"sellProbAtRecommended":0.7}]
+          """);
+        var worthwhile = CrossWorldScanner.SelectWorthwhile(tradeExamples.RootElement.EnumerateArray(), 10000);
+        if(worthwhile.Length!=2) throw new Exception("Total-gain floor did not remove low-value trades or excluded the exact boundary.");
+        if(worthwhile[0].GetProperty("id").GetInt32()!=4) throw new Exception("Trades not sorted by total expected gain.");
+        using var invalidTrades=JsonDocument.Parse("""[{"planExpectedProfit":null},{"profit":10000},{"planExpectedProfit":0},{"planExpectedProfit":-100}]""");
+        if(CrossWorldScanner.SelectWorthwhile(invalidTrades.RootElement.EnumerateArray(),0).Length!=0) throw new Exception("Missing or non-positive gain entered recommendations.");
+        using var misleadingMargin=JsonDocument.Parse("""[{"profit":10000,"planExpectedProfit":500,"sellProbAtRecommended":0.9}]""");
+        if(CrossWorldScanner.SelectWorthwhile(misleadingMargin.RootElement.EnumerateArray(),10000).Length!=0) throw new Exception("Unit margin bypassed total-profit floor.");
+        if(CrossWorldScanner.SelectWorthwhile(tradeExamples.RootElement.EnumerateArray(),0).Length!=4) throw new Exception("Explicit lower minimum did not allow smaller trades.");
+        using var tiedTrades=JsonDocument.Parse("""[{"id":1,"planExpectedProfit":10000,"sellProbAtRecommended":0.7},{"id":2,"planExpectedProfit":10000,"sellProbAtRecommended":0.9}]""");
+        if(CrossWorldScanner.SelectWorthwhile(tiedTrades.RootElement.EnumerateArray(),10000)[0].GetProperty("id").GetInt32()!=2) throw new Exception("Confidence did not break equal-gain ties.");
         var calls = new List<string>();
         HttpResponseMessage Respond(HttpRequestMessage request)
         {
@@ -38,6 +54,9 @@ public static class ScannerRegression
             if(result.Basket.GetProperty("totalCost").GetDouble()>settings.Budget) throw new Exception("Basket exceeded budget.");
             var poor=await new CrossWorldScanner(client).Run(settings with {Budget=1},catalog,[],_=>{},default);
             if(poor.Rows.Length!=0) throw new Exception("Scanner ignored upfront budget.");
+            var filtered=await new CrossWorldScanner(client).Run(settings with {MinExpectedProfit=int.MaxValue},catalog,[],_=>{},default);
+            if(filtered.Rows.Length!=0 || filtered.LowValueFiltered==0) throw new Exception("Scanner did not apply total-gain filter to actual model output.");
+            if(filtered.Basket.GetProperty("rows").GetArrayLength()!=0) throw new Exception("Low-value trade remained in the suggested basket.");
             using var canceled=new CancellationTokenSource(); canceled.Cancel();
             try { await new CrossWorldScanner(client).Run(settings,catalog,[],_=>{},canceled.Token); throw new Exception("Canceled scan returned results."); } catch(OperationCanceledException) { }
         }
@@ -61,12 +80,13 @@ public static class ScannerRegression
             var limited=await new CrossWorldScanner(client).Run(settings,catalog,[new(id,"Synthetic test item")],_=>{},default);
             if(limited.Rows.Length!=0 || !limited.Warnings.Any(x=>x.Contains("rate limit"))) throw new Exception("Rate limit did not preserve an explicit partial scan result.");
         }
-        return 11;
+        return 19;
     }
     private sealed class Handler(Func<HttpRequestMessage,HttpResponseMessage> respond):HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token)=>Task.FromResult(respond(request));
     }
 }
+
 
 

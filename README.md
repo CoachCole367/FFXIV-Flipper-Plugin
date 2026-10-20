@@ -8,17 +8,17 @@ Open `/fflipper` and choose **Find profitable flips**:
 
 1. Choose your home / sell world (automatically filled from your character when no world is saved).
 2. Choose the buy data center. Available DCs are in your home world's region; travel restrictions may still apply.
-3. Enter available gil and the number of items to scan (default 50, maximum 200).
+3. Enter available gil, number of items (default 50, maximum 200) and minimum expected gain per trade (default 10,000 gil).
 4. Click **Scan for profitable flips**. Automatic discovery uses recently updated Universalis items; no item search is required.
-5. Review the suggested budget basket and expand opportunities for the buy world, exact full stacks, upfront capital, target sell price, expected cash gain, sale confidence, clear time, freshness and markdown scenario.
+5. Compare opportunities in the table, sorted by total expected gain. Select a row to see its exact full stacks, target sell price and market evidence in the details panel. The Basket column marks trades selected within the combined budget.
 
-The list shows all qualifying opportunities. Only the suggested basket is selected to fit the combined budget. An empty result means no plan passed the model and filters in this bounded sample. Skipped items and API failures are shown separately. Cancel and changed settings discard old results.
+The list shows trades meeting your total expected-gain floor. The default 10,000-gil floor is applied before basket selection, keeping tiny trades out of both results and basket. This is separate from the advanced margin-per-planned-unit setting. You can lower the total floor explicitly. The underlying browser demand model is unchanged. Only the suggested basket is selected to fit the combined budget. An empty result means no plan passed the model and filters in this bounded sample. Skipped items and API failures are shown separately. Cancel and changed settings discard old results.
 
 Optional selected-item mode scans the item chosen in **Single item**. Item suggestions close after selection; world controls are real dropdowns. The Single item tab also provides the website's full sell-price tiers and manual whole-stack scenarios.
 
 ## Model and limits
 
-Version 0.3.0 embeds the website's unchanged `scanner-strategy.js`, `scanner-planner.js` and `market-data.js` calculation modules using Jint 4.17.0. The two small helper exports are extracted from `api.js` and `scanner-history.js`. Only import names are normalized for the in-memory module loader. The structuredClone compatibility function handles the planner's JSON-compatible purchase-plan data. There is no script download, CLR exposure, website dependency or external JavaScript execution service.
+Version 0.4.0 embeds the website's unchanged `scanner-strategy.js`, `scanner-planner.js` and `market-data.js` calculation modules using Jint 4.17.0. The two small helper exports are extracted from `api.js` and `scanner-history.js`. Only import names are normalized for the in-memory module loader. The structuredClone compatibility function handles the planner's JSON-compatible purchase-plan data. There is no script download, CLR exposure, website dependency or external JavaScript execution service.
 
 The same demand distributions, recency/dispersion models, price-ladder competition, confidence taper, exit-price planning, full-stack purchasing, expected cash recovery, ranking and basket selection run off the game thread. New scans start without learned personal calibration, as does a fresh browser installation. Saved calibration/history learning, Smart Auto profile selection, crafting and vendor scanning are not ported yet.
 
@@ -45,9 +45,9 @@ Packaged output is under `FFXIVFlipper/bin/Release/FFXIVFlipper/latest.zip`. Thi
 
 - Clean release build; 31 market regressions plus three embedded-source hash checks.
 - 25 frozen browser parity fixtures compare numerical model output, plans, budgets, exact listing identifiers and quality; includes positive NQ/HQ and rejection cases.
-- Eleven scanner integration checks exercise automatic discovery, seller-world history, full-stack cost, budget, sampled supply, cancellation, missing history, wrong-DC rejection, timeout and rate-limit handling.
+- Nineteen scanner integration checks exercise automatic discovery, seller-world history, full-stack cost, budget, sampled supply, cancellation, missing history, wrong-DC rejection, timeout and rate-limit handling, total-gain thresholds, ordering, missing-value rejection and basket exclusion.
 - Live scans exercised current API data. The final ten-item run (nine discovered items plus a known heavier calculation case) completed with one qualifying plan and no errors or skipped items. These are snapshot observations, not future profit guarantees.
-- The user verified the earlier comparison UI in game. New scanner layout, dropdowns and in-game scanning still require visual/interaction verification.
+- The user verified 0.3.0 scanning and dropdowns in game. Version 0.4.0 replaces the long form with compact controls, an opaque window, a comparison table, budget summary and one selected-trade detail panel; the new layout still requires visual/interaction verification in game.
 
 Regenerate browser reference fixtures only when deliberately updating the copied model, with Node available for development:
 
@@ -66,11 +66,12 @@ dotnet run --project tests/Economics.Tests.csproj -- --scan-live
 
 ## Remaining work
 
-- Verify the new UI and a scan in a running game; profile in-game responsiveness.
+- Verify the redesigned 0.4.0 UI in a running game; profile in-game responsiveness.
 - Add saved watchlists/trade history and compatible learning/calibration.
 - Expand candidate discovery and request batching/deduplication/retry handling.
 - Port crafting/vendor tools if desired.
 - Publish a tested release and installation feed.
 
 Jint and Acornima license notices are in `licenses/`. Sources: https://dalamud.dev/plugin-development/ and https://docs.universalis.app/ . Official Dalamud repository submissions require human review and compliance with its AI usage policy; this project is not represented as already approved.
+
 
