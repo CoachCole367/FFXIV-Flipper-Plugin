@@ -1,0 +1,2 @@
+# Preserve the exact browser calculation snapshots used by source-hash fixtures.
+FFXIVFlipper/Model/*.js -text

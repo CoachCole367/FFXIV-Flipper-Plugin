@@ -8,6 +8,6 @@
 - Retain ten-item batching, at most two requests and one prefetched batch.
 - Add versioned packaging, checksum, custom update-feed generation and build validation.
 
-Validation: 165 checks, including sorting in both directions, persistence bounds, candidate rotation, aggregate identity/freshness, model parity, cancellation, request limits, and journal reload/corruption recovery. Two 200-candidate live scans completed with explicit unavailable-item warnings. User confirmed the 200-item Balanced scan, Upfront sorting, cancellation and responsiveness in game.
+Validation: 165 checks, including sorting in both directions, persistence bounds, candidate rotation, aggregate identity/freshness, model parity, cancellation, request limits, and journal reload/corruption recovery. Two 200-candidate live scans completed with explicit unavailable-item warnings. User confirmed the 200-item Balanced scan, Upfront sorting, cancellation, responsiveness and journal persistence after disable/re-enable.
 
 Limitations: Universalis data remains sampled; upstream failures skip affected items. Watchlist UI persistence after an in-game reload and real purchase/sale event wiring need manual verification. Aggregate activity ranks candidates; it does not guarantee profitability.

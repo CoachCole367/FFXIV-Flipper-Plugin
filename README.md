@@ -122,7 +122,7 @@ Use Manage watchlists to create up to eight named lists, search for items and re
 
 Validation for 0.6.0: 165 automated checks pass. Two full live scans each screened 1,000 IDs and evaluated 200 candidates. Balanced found 35 trades in 31.44s with 10 unavailable-item warnings; a different active-market slice found 8 in 27.67s with 21 warnings. Some batched requests encountered temporary upstream/network failures; affected items were explicitly skipped. These are different candidate sets and snapshot observations, not a source-quality comparison or a profit guarantee.
 
-The user verified a 200-item Balanced scan, both Upfront sort directions, restart/cancel and game responsiveness. The new layout and canceled state were inspected in game using the Computer Use skill. Journal reload/corruption/write-failure recovery is covered by automated tests; real purchase/sale event verification remains a separate manual check.
+The user verified a 200-item Balanced scan, both Upfront sort directions, restart/cancel, game responsiveness and journal persistence after disable/re-enable. The new layout and canceled state were inspected in game using the Computer Use skill. Journal reload/corruption/write-failure recovery is covered by automated tests; real purchase/sale event verification remains a separate manual check.
 
 ## Releasing and updates
 
