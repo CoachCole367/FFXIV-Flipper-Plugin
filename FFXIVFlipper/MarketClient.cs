@@ -12,11 +12,12 @@ public sealed class MarketClient : IDisposable
     {
         http = handler == null ? new() : new(handler);
         http.Timeout = TimeSpan.FromSeconds(25);
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("FFXIVFlipper/0.2.0");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("FFXIVFlipper/0.3.0");
     }
-    public async Task<MarketSnapshot> Fetch(uint world, uint item, bool withHistory, CancellationToken token)
+    public async Task<MarketSnapshot> Fetch(uint world, uint item, bool withHistory, CancellationToken token, int listingLimit = 100)
     {
-        var snapshot = MarketParser.Listings(await Get($"{world}/{item}?listings=100&entries=0", token), world, item);
+        var snapshot = MarketParser.Listings(await Get($"{world}/{item}?listings={listingLimit}&entries=0", token), world, item);
+        snapshot = snapshot with { SampleLimited = snapshot.Listings.Length >= listingLimit };
         if (!withHistory) return snapshot;
         var until = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         // History is deliberately uncached so the explicit end time always matches its coverage window.
@@ -65,6 +66,37 @@ public sealed class MarketClient : IDisposable
         }
         finally { slots.Release(); }
     }
+    public async Task<uint[]> Candidates(string dc, int count, CancellationToken token)
+    {
+        var json = await Get($"extra/stats/most-recently-updated?dcName={Uri.EscapeDataString(dc)}&entries={Math.Clamp(count, 1, 200)}", token, false);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("items", out var rows) || rows.ValueKind != System.Text.Json.JsonValueKind.Array)
+            throw new InvalidDataException("Candidate response has no items.");
+        return rows.EnumerateArray().Where(x => x.TryGetProperty("itemID", out var id) && id.TryGetUInt32(out var value) && value > 0)
+            .Select(x => x.GetProperty("itemID").GetUInt32()).Distinct().Take(count).ToArray();
+    }
+    public async Task<Dictionary<string, MarketSnapshot>> Supply(string dc, uint item, IReadOnlyDictionary<uint, string> worlds, CancellationToken token)
+    {
+        var json = await Get($"{Uri.EscapeDataString(dc)}/{item}?listings=1000&entries=0", token);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("itemID", out var id) || id.GetUInt32() != item || !root.TryGetProperty("dcName", out var name) || name.GetString() != dc)
+            throw new InvalidDataException("Supply response did not match the requested item and data center.");
+        if (!root.TryGetProperty("listings", out var rows) || rows.ValueKind != System.Text.Json.JsonValueKind.Array)
+            throw new InvalidDataException("Cross-world listings unavailable.");
+        var result = new Dictionary<string, MarketSnapshot>();
+        foreach (var group in rows.EnumerateArray().Where(x => x.TryGetProperty("worldID", out var w) && w.TryGetUInt32(out var value) && worlds.ContainsKey(value)).GroupBy(x => x.GetProperty("worldID").GetUInt32()))
+        {
+            long uploaded = 0;
+            if (root.TryGetProperty("worldUploadTimes", out var times) && times.TryGetProperty(group.Key.ToString(), out var time)) time.TryGetInt64(out uploaded);
+            var worldJson = System.Text.Json.JsonSerializer.Serialize(new { worldID = group.Key, itemID = item, lastUploadTime = uploaded, listings = group.ToArray() });
+            result[worlds[group.Key]] = MarketParser.Listings(worldJson, group.Key, item) with { SampleLimited = true };
+        }
+        return result;
+    }
     public void Dispose() => http.Dispose();
 }
+
+
+
 

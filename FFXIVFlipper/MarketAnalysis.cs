@@ -1,9 +1,9 @@
 using System.Text.Json;
 namespace FFXIVFlipper;
-public sealed record Listing(int PricePerUnit, int Quantity, bool Hq);
+public sealed record Listing(int PricePerUnit, int Quantity, bool Hq, long LastReviewTimeSec = 0, string ListingId = "");
 public sealed record Sale(int PricePerUnit, int Quantity, bool Hq, long Timestamp);
 public sealed record SalesHistory(Sale[] Sales, bool Complete, string Status, long WindowEnd);
-public sealed record MarketSnapshot(long LastUploadTime, Listing[] Listings, SalesHistory History);
+public sealed record MarketSnapshot(long LastUploadTime, Listing[] Listings, SalesHistory History, bool SampleLimited = false);
 
 public static class MarketParser
 {
@@ -20,7 +20,7 @@ public static class MarketParser
         foreach (var row in rows.EnumerateArray())
         {
             if (!TryTrade(row, out var price, out var qty, out var hq)) throw new InvalidDataException("Listing sample contains malformed or unknown-quality rows.");
-            listings.Add(new(price, qty, hq));
+            listings.Add(new(price, qty, hq, Number(row, "lastReviewTime"), row.TryGetProperty("listingID", out var listingId) ? listingId.ToString() : ""));
         }
         var uploaded = Number(root, "lastUploadTime");
         return new(uploaded, listings.OrderBy(x => x.PricePerUnit).ToArray(), new([], false, "Sales history unavailable.", 0));
@@ -93,4 +93,6 @@ public static class MarketAnalysis
             "Reference: lower of matching-quality volume-weighted median and cheapest sampled listing. Historical pace is not your expected sales.");
     }
 }
+
+
 

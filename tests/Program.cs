@@ -64,7 +64,68 @@ using (var client = new MarketClient(new StubHandler(_ => { requests++; var resp
     for (var i = 0; i < 2; i++) try { await client.Fetch(world, item, false, default); throw new Exception("Rate limit ignored"); } catch (HttpRequestException) { }
     Check(requests == 1, "Rate limit cooldown blocks repeated requests");
 }
-Console.WriteLine($"{checks} regressions passed.");
+Console.WriteLine($"{checks} market regressions passed.");
+using (var planner = new PlannerEngine(default))
+{
+    using var fixtures = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "browser-parity.json")));
+    foreach (var source in fixtures.RootElement.GetProperty("hashes").EnumerateObject())
+    {
+        var assembly = typeof(PlannerEngine).Assembly;
+        var resource = assembly.GetManifestResourceNames().Single(x => x.EndsWith(".Model." + source.Name, StringComparison.Ordinal));
+        using var stream = assembly.GetManifestResourceStream(resource)!;
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).ToLowerInvariant();
+        Check(hash == source.Value.GetString(), $"Embedded browser model source drifted: {source.Name}");
+    }
+    Console.WriteLine("3 model source hash checks passed.");
+    var parityCount = 0;
+    foreach (var fixture in fixtures.RootElement.GetProperty("cases").EnumerateArray())
+    {
+        var json = fixture.GetProperty("input").GetRawText();
+        var output = fixture.GetProperty("kind").GetString() switch { "demand" => planner.Demand(json), "guide" => planner.Guide(json), _ => planner.Run(json) };
+        using var actual = JsonDocument.Parse(output);
+        Compare(fixture.GetProperty("expected"), actual.RootElement, fixture.GetProperty("name").GetString()!);
+        parityCount++;
+    }
+    Console.WriteLine($"{parityCount} browser-model parity fixtures passed.");
+}
+Console.WriteLine($"{await ScannerRegression.Run()} scanner integration checks passed.");
+if (args.Contains("--scan-live"))
+{
+    using var client = new MarketClient();
+    var worlds = new Dictionary<uint,string> { [35]="Famfrit",[53]="Exodus",[55]="Ultros",[64]="Leviathan",[77]="Lamia",[78]="Behemoth",[93]="Excalibur",[95]="Hyperion" };
+    var candidates = (await client.Candidates("Primal",9,default)).Append(52256u).Distinct().ToArray();
+    var catalog = candidates.ToDictionary(x=>x,x=>$"Item {x}");
+    var settings = new ScanSettings(64,"Leviathan","Primal",worlds,500000,10,2,.7,20,1000);
+    using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+    var scan = await new CrossWorldScanner(client).Run(settings,catalog,candidates.Select(x=>new ScanItem(x,$"Item {x}")).ToArray(),p=>Console.WriteLine($"{p.Completed}/{p.Total} {p.Message}"),deadline.Token);
+    Console.WriteLine($"Live scanner: {scan.Evaluated} evaluated, {scan.Rows.Length} qualifying plans, {scan.Warnings.Length} skipped items.");
+    foreach(var warning in scan.Warnings) Console.WriteLine(warning);
+    if(scan.Basket.GetProperty("totalCost").GetDouble()>settings.Budget) throw new Exception("Live basket exceeded budget.");
+}
+static void Compare(JsonElement expected, JsonElement actual, string path)
+{
+    if (expected.ValueKind != actual.ValueKind) throw new Exception($"Parity type mismatch at {path}: {expected.ValueKind} vs {actual.ValueKind}");
+    if (expected.ValueKind == JsonValueKind.Number)
+    {
+        var a=expected.GetDouble(); var b=actual.GetDouble();
+        if (Math.Abs(a-b) > 1e-7 * Math.Max(1,Math.Abs(a))) throw new Exception($"Parity numeric mismatch at {path}: {a} vs {b}");
+    }
+    else if (expected.ValueKind == JsonValueKind.Array)
+    {
+        if (expected.GetArrayLength()!=actual.GetArrayLength()) throw new Exception($"Parity count mismatch at {path}");
+        for (var i=0;i<expected.GetArrayLength();i++) Compare(expected[i],actual[i],$"{path}[{i}]");
+    }
+    else if (expected.ValueKind == JsonValueKind.Object)
+    {
+        foreach(var property in expected.EnumerateObject())
+        {
+            if(!actual.TryGetProperty(property.Name,out var value)) throw new Exception($"Missing parity key {path}.{property.Name}");
+            Compare(property.Value,value,$"{path}.{property.Name}");
+        }
+    }
+    else if (expected.ValueKind is JsonValueKind.True or JsonValueKind.False && expected.GetBoolean()!=actual.GetBoolean()) throw new Exception($"Parity bool mismatch at {path}");
+    else if (expected.ValueKind == JsonValueKind.String && (path.EndsWith("buyWorld") || path.EndsWith("quality") || path.EndsWith("listingId") || path.EndsWith("worldName") || path.EndsWith("modelType")) && expected.GetString()!=actual.GetString()) throw new Exception($"Parity identifier mismatch at {path}");
+}
 if (args.Contains("--live"))
 {
     using var client = new MarketClient();
@@ -76,3 +137,9 @@ sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) 
 {
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(respond(request));
 }
+
+
+
+
+
+

@@ -13,6 +13,20 @@
         "requested": "[1.2.39, )",
         "resolved": "1.2.39",
         "contentHash": "fcFN01tDTIQqDuTwr1jUQK/geofiwjG5DycJQOnC72i1SsLAk1ELe+apBOuZ11UMQG8YKFZG1FgvjZPbqHyatg=="
+      },
+      "Jint": {
+        "type": "Direct",
+        "requested": "[4.17.0, )",
+        "resolved": "4.17.0",
+        "contentHash": "9jdpLQQYsWTjOn2THpiR8zRJ34ksV6ofW0gJvZxJW/fIGK+A+TkpWonhuuLDRwqLDjP+9WsxYt2MEge6lWjk2A==",
+        "dependencies": {
+          "Acornima": "1.7.0"
+        }
+      },
+      "Acornima": {
+        "type": "Transitive",
+        "resolved": "1.7.0",
+        "contentHash": "a2I4O4qkuAdB0oSaGz6/k0n/bXxMbGcLBra5dNTTVSLmTwM7uORA8ebpOrNMmDfFWOMwvuaRL6gPprRV4HTV0w=="
       }
     }
   }

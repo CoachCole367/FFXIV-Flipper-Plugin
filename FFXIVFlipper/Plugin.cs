@@ -8,6 +8,7 @@ public sealed class Plugin : IDalamudPlugin
 {
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ICommandManager Commands { get; private set; } = null!;
+    [PluginService] internal static IPlayerState Player { get; private set; } = null!;
     [PluginService] internal static IDataManager Data { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     private readonly WindowSystem windows = new("FFXIVFlipper");
@@ -34,3 +35,4 @@ public sealed class Plugin : IDalamudPlugin
         main.Dispose();
     }
 }
+
