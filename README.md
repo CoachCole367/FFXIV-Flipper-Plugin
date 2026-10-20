@@ -18,8 +18,6 @@ https://raw.githubusercontent.com/CoachCole367/FFXIV-Flipper-Plugin/main/repo.js
 
 Updates appear in the Dalamud plugin installer. This is a custom repository, not an official Dalamud repository listing.
 
-**Switching from the dev build?** Disable/remove its Dev Plugin Location before installing the release. Keep your existing configuration. Back up purchase-journal.json from %AppData%\XIVLauncher\pluginConfigs\FFXIVFlipper first; both builds use that folder.
-
 ## Use it
 
 - Choose your sell world, buy data center, available gil, and minimum expected gain.
