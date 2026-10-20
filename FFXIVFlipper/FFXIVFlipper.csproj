@@ -1,7 +1,7 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
     <Version>0.6.0</Version>
-    <Author>CoachCole367</Author>
+    <Author>FFXIV Flipper</Author>
     <Name>FFXIV Flipper</Name>
     <Punchline>Market research and whole-stack profit estimates.</Punchline>
     <Description>In-game market research using Universalis. Profitable cross-world flips with home-world sell prices, exact-stack plans, budget baskets and a bounded purchase journal.</Description>

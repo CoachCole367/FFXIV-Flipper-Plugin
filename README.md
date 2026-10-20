@@ -1,32 +1,30 @@
 # FFXIV Flipper
 
-Find items to buy on other worlds and resell on your home world, with sell-price guidance and a lightweight purchase journal.
+Find cross-world flips, check suggested sell prices, and track purchases in game.
 
-## Install in Dalamud
+## Installation
 
 Requires **XIVLauncher with Dalamud enabled**.
 
-1. In game, open /xlsettings.
-2. Go to **Experimental → Custom Plugin Repositories**.
-3. Add the URL below, enable its checkbox, and save.
-4. Open /xlplugins, search for **FFXIV Flipper**, and install it.
-5. Open the plugin with **/fflipper**.
+1. In game, run `/xlsettings`.
+2. Open **Experimental → Custom Plugin Repositories**.
+3. Add this URL, enable its checkbox, and save:
 
-~~~text
-https://raw.githubusercontent.com/CoachCole367/FFXIV-Flipper-Plugin/main/repo.json
-~~~
+   ```text
+   https://raw.githubusercontent.com/CoachCole367/FFXIV-Flipper-Plugin/main/repo.json
+   ```
 
-Updates appear in the Dalamud plugin installer. This is a custom repository, not an official Dalamud repository listing.
+4. Run `/xlplugins`, search for **FFXIV Flipper**, and install it.
+5. Run `/fflipper` to open the plugin.
 
-## Use it
+Install future updates through the Dalamud plugin installer. If you previously used a development build, disable its dev plugin entry before installing; keep your plugin configuration to retain the journal.
 
-- Choose your sell world, buy data center, available gil, and minimum expected gain.
-- Start with **Balanced discovery**, then click **Scan for flips**.
-- Click column headings to sort; click item names to copy them for market-board searches.
-- **Sell / unit** is the suggested listing price. Select a trade to see the exact stacks to buy.
-- Save favorite items to **watchlists**, or use **Active market sweep** to explore more items.
-- **Purchase journal** records confirmed purchases. Enter actual sales manually; sales are not detected automatically.
+## Typical daily use
 
-Prices are Universalis snapshots. Verify listings in game. Estimates assume 5% seller tax and exclude buyer tax and travel costs.
+1. Open `/fflipper`. Choose your sell world, buy data center, available gil, and minimum expected gain.
+2. Select **Balanced discovery**, then click **Scan for flips**. Use a saved watchlist for familiar items or **Active market sweep** to explore more.
+3. Review expected gain, upfront cost, and selling time. Click column headings to sort and select a trade to see the exact stacks to buy. Only the suggested basket fits the combined budget.
+4. Click an item name to copy it for a market-board search. Verify the listings in game, then travel and buy manually. **Sell / unit** is the suggested listing price on your sell world.
+5. Enable purchase tracking in **Purchase journal** before buying if you want confirmed purchases recorded. After selling, select the purchase and enter the units sold and total gil received after seller tax. Sales must be recorded manually.
 
-[Latest release](https://github.com/CoachCole367/FFXIV-Flipper-Plugin/releases/latest) · [More about scanning and the journal](docs/USAGE.md) · [Build, test and release](docs/DEVELOPMENT.md) · [Changelog](CHANGELOG.md)
+Prices are Universalis snapshots and can change. Estimates assume 5% seller tax and exclude buyer tax and travel costs. Purchases, travel, and repricing are manual. Journal records stay local and retain up to 1,000 purchases for 90 days.
