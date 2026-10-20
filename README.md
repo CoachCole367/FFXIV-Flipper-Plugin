@@ -36,7 +36,7 @@ Storage errors are displayed. A malformed, oversized or unsupported existing jou
 
 ## Model and limits
 
-Version 0.5.2 embeds the website's unchanged `scanner-strategy.js`, `scanner-planner.js` and `market-data.js` calculation modules using Jint 4.17.0. The two small helper exports are extracted from `api.js` and `scanner-history.js`. Only import names are normalized for the in-memory module loader. The structuredClone compatibility function handles the planner's JSON-compatible purchase-plan data. There is no script download, CLR exposure, website dependency or external JavaScript execution service.
+Version 0.5.3 embeds the website's unchanged `scanner-strategy.js`, `scanner-planner.js` and `market-data.js` calculation modules using Jint 4.17.0. The two small helper exports are extracted from `api.js` and `scanner-history.js`. Only import names are normalized for the in-memory module loader. The structuredClone compatibility function handles the planner's JSON-compatible purchase-plan data. There is no script download, CLR exposure, website dependency or external JavaScript execution service.
 
 The same demand distributions, recency/dispersion models, price-ladder competition, confidence taper, exit-price planning, full-stack purchasing, expected cash recovery, ranking and basket selection run off the game thread. New scans start without learned personal calibration, as does a fresh browser installation. Saved calibration/history learning, Smart Auto profile selection, crafting and vendor scanning are not ported yet.
 
@@ -86,7 +86,7 @@ dotnet run --project tests/Economics.Tests.csproj -- --scan-live
 
 - Verify the redesigned 0.4.0 UI in a running game; profile in-game responsiveness.
 - Add saved watchlists and compatible learning/calibration; optional retainer-sale automation remains separate from the bounded purchase journal.
-- Expand candidate discovery and request batching/deduplication/retry handling.
+- Expand candidate discovery and selective retries for unavailable data.
 - Port crafting/vendor tools if desired.
 - Publish a tested release and installation feed.
 
@@ -98,4 +98,10 @@ Jint and Acornima license notices are in `licenses/`. Sources: https://dalamud.d
 
 
 
-Scanner performance experiments and measured results: [benchmark report](benchmarks/README.md). These prototypes do not change the running plugin.
+Version 0.5.3 implements ten-item market batches, a fixed prepared-module cache and one-batch prefetch. Requests remain capped at two; item calculations remain isolated and sequential. Batch payloads are not cached to disk or retained across scans. Missing, mismatched or capped item evidence is excluded without discarding valid neighboring items. Rate limits stop the scan, and cancellation drains pending requests.
+
+Validation: all 131 checks passed, including 14 new batching/pipeline checks. The production scanner completed a live 21-item, three-batch scan in 2.21 seconds with no skipped items, including the known heavy calculation case. This snapshot yielded no qualifying trades. The 0.5.3 build succeeded without warnings or errors, and the Dalamud log confirmed automatic unload/reload and successful plugin initialization. In-game scan responsiveness and a long-duration memory soak remain unverified.
+
+Original performance experiments: [benchmark report](benchmarks/README.md). The benchmark engine remains a 0.5.2 reference snapshot.
+
+Optional multi-batch live check: dotnet run --project tests/Economics.Tests.csproj -c Release -- --scan-live-wide.

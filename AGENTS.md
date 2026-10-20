@@ -10,3 +10,5 @@
 - Definition of done: build, market/parity/scanner regressions, and in-game flows tested or explicitly unverified. Keep README accurate and dependency license notices packaged.
 
 - Purchase journal: 1,000 lots / 90 days / 512 KB; no snapshots, polling or growing backups. Log only matched confirmed purchases; sales stay actual manual entries. Keep character IDs and journal/export data local.
+
+- Scanner performance: batches of at most ten, max two HTTP requests, one prefetched batch, fresh interpreter per item. Cache only fixed prepared code; never retain batch payloads across scans. Multi-batch live check: dotnet run --project tests/Economics.Tests.csproj -c Release -- --scan-live-wide.

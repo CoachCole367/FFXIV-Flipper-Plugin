@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http;
+using System.Text.Json;
 namespace FFXIVFlipper;
+public sealed record ScanMarketItem(Dictionary<string, MarketSnapshot>? Supply, MarketSnapshot? Home, string? Error);
 public sealed class MarketClient : IDisposable
 {
     private readonly HttpClient http;
@@ -12,7 +14,7 @@ public sealed class MarketClient : IDisposable
     {
         http = handler == null ? new() : new(handler);
         http.Timeout = TimeSpan.FromSeconds(25);
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("FFXIVFlipper/0.5.2");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("FFXIVFlipper/0.5.3");
     }
     public async Task<MarketSnapshot> Fetch(uint world, uint item, bool withHistory, CancellationToken token, int listingLimit = 100)
     {
@@ -78,11 +80,14 @@ public sealed class MarketClient : IDisposable
     public async Task<Dictionary<string, MarketSnapshot>> Supply(string dc, uint item, IReadOnlyDictionary<uint, string> worlds, CancellationToken token)
     {
         var json = await Get($"{Uri.EscapeDataString(dc)}/{item}?listings=1000&entries=0", token);
-        using var doc = System.Text.Json.JsonDocument.Parse(json);
-        var root = doc.RootElement;
+        using var doc = JsonDocument.Parse(json);
+        return ParseSupply(doc.RootElement, dc, item, worlds);
+    }
+    private static Dictionary<string, MarketSnapshot> ParseSupply(JsonElement root, string dc, uint item, IReadOnlyDictionary<uint, string> worlds)
+    {
         if (!root.TryGetProperty("itemID", out var id) || id.GetUInt32() != item || !root.TryGetProperty("dcName", out var name) || name.GetString() != dc)
             throw new InvalidDataException("Supply response did not match the requested item and data center.");
-        if (!root.TryGetProperty("listings", out var rows) || rows.ValueKind != System.Text.Json.JsonValueKind.Array)
+          if (!root.TryGetProperty("listings", out var rows) || rows.ValueKind != System.Text.Json.JsonValueKind.Array)
             throw new InvalidDataException("Cross-world listings unavailable.");
         var result = new Dictionary<string, MarketSnapshot>();
         foreach (var group in rows.EnumerateArray().Where(x => x.TryGetProperty("worldID", out var w) && w.TryGetUInt32(out var value) && worlds.ContainsKey(value)).GroupBy(x => x.GetProperty("worldID").GetUInt32()))
@@ -93,6 +98,82 @@ public sealed class MarketClient : IDisposable
             result[worlds[group.Key]] = MarketParser.Listings(worldJson, group.Key, item) with { SampleLimited = true };
         }
         return result;
+    }
+    // Responses are intentionally uncached: at most the current and next ten-item batches
+    // are retained by the scanner, rather than accumulating large raw batch payloads.
+    public async Task<Dictionary<uint, ScanMarketItem>> ScanBatch(string dc, uint homeWorld, uint[] items,
+        IReadOnlyDictionary<uint, string> worlds, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (items.Length is < 1 or > 10 || items.Any(x => x == 0) || items.Distinct().Count() != items.Length)
+            throw new ArgumentException("A scan batch must contain one to ten distinct item IDs.", nameof(items));
+        var ids = string.Join(",", items);
+        var until = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        async Task<(string? Json, string? Error)> Read(string path)
+        {
+            try { return (await Get(path, token, false), null); }
+            catch (OperationCanceledException) when (!token.IsCancellationRequested) { return (null, "Market request timed out; item skipped."); }
+            catch (Exception ex) when (ex is HttpRequestException or InvalidDataException or JsonException)
+            { return (null, ex.Message); }
+        }
+        var supplyTask = Read($"{Uri.EscapeDataString(dc)}/{ids}?listings=1000&entries=0");
+        var homeTask = Read($"{homeWorld}/{ids}?listings=1000&entries=0");
+        var historyTask = Read($"history/{homeWorld}/{ids}?entriesToReturn={MarketParser.HistoryLimit}&entriesWithin={MarketParser.WindowSeconds}&entriesUntil={until}");
+        await Task.WhenAll(supplyTask, homeTask, historyTask);
+        token.ThrowIfCancellationRequested();
+        var responses = new[] { await supplyTask, await homeTask, await historyTask };
+        var result = new Dictionary<uint, ScanMarketItem>();
+        var error = responses.FirstOrDefault(x => x.Error?.Contains("rate limit", StringComparison.OrdinalIgnoreCase) == true).Error
+            ?? responses.FirstOrDefault(x => x.Error != null).Error;
+        if (error != null)
+        {
+            foreach (var item in items) result[item] = new(null, null, error);
+            return result;
+        }
+        using var supplyDoc = JsonDocument.Parse(responses[0].Json!);
+        using var homeDoc = JsonDocument.Parse(responses[1].Json!);
+        using var historyDoc = JsonDocument.Parse(responses[2].Json!);
+        foreach (var item in items)
+        {
+            token.ThrowIfCancellationRequested();
+            try
+            {
+                var supply = BatchItem(supplyDoc.RootElement, item, items.Length > 1, dc, null);
+                var home = BatchItem(homeDoc.RootElement, item, items.Length > 1, null, homeWorld);
+                var history = BatchItem(historyDoc.RootElement, item, items.Length > 1, null, homeWorld);
+                var snapshot = MarketParser.Listings(home.GetRawText(), homeWorld, item);
+                snapshot = snapshot with
+                {
+                    SampleLimited = snapshot.Listings.Length >= 1000,
+                    History = MarketParser.History(history.GetRawText(), homeWorld, item, until)
+                };
+                result[item] = new(ParseSupply(supply, dc, item, worlds), snapshot, null);
+            }
+            catch (Exception ex) when (ex is InvalidDataException or JsonException or InvalidOperationException or FormatException or OverflowException)
+            { result[item] = new(null, null, ex.Message); }
+        }
+        return result;
+    }
+    private static JsonElement BatchItem(JsonElement root, uint item, bool batch, string? dc, uint? world)
+    {
+        if (root.ValueKind != JsonValueKind.Object ||
+            (dc != null && (!root.TryGetProperty("dcName", out var dcName) || dcName.GetString() != dc)) ||
+            (world != null && (!root.TryGetProperty("worldID", out var worldId) || !worldId.TryGetUInt32(out var value) || value != world)))
+            throw new InvalidDataException("Batch response did not match the requested market.");
+        if (batch)
+        {
+            if (root.TryGetProperty("unresolvedItems", out var unresolved) && unresolved.ValueKind == JsonValueKind.Array &&
+                unresolved.EnumerateArray().Any(x => x.TryGetUInt32(out var value) && value == item))
+                throw new InvalidDataException($"Item {item}: market data unresolved.");
+              if (!root.TryGetProperty("items", out var entries) || entries.ValueKind != JsonValueKind.Object ||
+                !entries.TryGetProperty(item.ToString(), out root))
+                throw new InvalidDataException($"Item {item}: missing from market batch.");
+        }
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("itemID", out var id) || !id.TryGetUInt32(out var actual) || actual != item ||
+            (dc != null && (!root.TryGetProperty("dcName", out var name) || name.GetString() != dc)) ||
+            (world != null && (!root.TryGetProperty("worldID", out var w) || !w.TryGetUInt32(out var actualWorld) || actualWorld != world)))
+            throw new InvalidDataException($"Item {item}: response identity mismatch.");
+        return root;
     }
     public void Dispose() => http.Dispose();
 }

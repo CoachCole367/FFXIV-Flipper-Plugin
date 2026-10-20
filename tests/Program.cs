@@ -2,6 +2,7 @@ using FFXIVFlipper;
 using System.Net;
 using System.Text.Json;
 
+Console.WriteLine($"{await BatchRegression.Run()} batch/pipeline regressions passed.");
 var checks = 0;
 void Check(bool ok, string name) { if (!ok) throw new Exception(name); checks++; }
 void Throws(Action action, string name) { try { action(); } catch (ArgumentException) { checks++; return; } catch (InvalidDataException) { checks++; return; } throw new Exception(name); }
@@ -90,16 +91,18 @@ using (var planner = new PlannerEngine(default))
 }
 Console.WriteLine($"{await ScannerRegression.Run()} scanner integration checks passed.");
 Console.WriteLine($"{await JournalRegression.Run()} journal checks passed.");
-if (args.Contains("--scan-live"))
+if (args.Contains("--scan-live") || args.Contains("--scan-live-wide"))
 {
     using var client = new MarketClient();
-    var worlds = new Dictionary<uint,string> { [35]="Famfrit",[53]="Exodus",[55]="Ultros",[64]="Leviathan",[77]="Lamia",[78]="Behemoth",[93]="Excalibur",[95]="Hyperion" };
-    var candidates = (await client.Candidates("Primal",9,default)).Append(52256u).Distinct().ToArray();
+    var worlds = new Dictionary<uint,string> { [35]="Famfrit",[53]="Exodus",[55]="Lamia",[64]="Leviathan",[77]="Ultros",[78]="Behemoth",[93]="Excalibur",[95]="Hyperion" };
+    var liveCount = args.Contains("--scan-live-wide") ? 21 : 10;
+    var candidates = (await client.Candidates("Primal",liveCount - 1,default)).Append(52256u).Distinct().ToArray();
     var catalog = candidates.ToDictionary(x=>x,x=>$"Item {x}");
-    var settings = new ScanSettings(64,"Leviathan","Primal",worlds,500000,10,2,.7,20,1000);
+    var settings = new ScanSettings(64,"Leviathan","Primal",worlds,500000,liveCount,2,.7,20,1000);
     using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+    var timer = System.Diagnostics.Stopwatch.StartNew();
     var scan = await new CrossWorldScanner(client).Run(settings,catalog,candidates.Select(x=>new ScanItem(x,$"Item {x}")).ToArray(),p=>Console.WriteLine($"{p.Completed}/{p.Total} {p.Message}"),deadline.Token);
-    Console.WriteLine($"Live scanner: {scan.Evaluated} evaluated, {scan.Rows.Length} qualifying plans, {scan.Warnings.Length} skipped items.");
+    Console.WriteLine($"Live scanner ({timer.Elapsed.TotalSeconds:F2}s): {scan.Evaluated} evaluated, {scan.Rows.Length} qualifying plans, {scan.Warnings.Length} skipped items.");
     foreach(var warning in scan.Warnings) Console.WriteLine(warning);
     if(scan.Basket.GetProperty("totalCost").GetDouble()>settings.Budget) throw new Exception("Live basket exceeded budget.");
 }

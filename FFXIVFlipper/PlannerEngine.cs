@@ -5,20 +5,21 @@ namespace FFXIVFlipper;
 // Each scan owns its interpreter and runs on a background task. Only embedded calculation code is loaded.
 public sealed class PlannerEngine : IDisposable
 {
-    private readonly Engine engine;
-    public PlannerEngine(CancellationToken token)
+    // Fixed code only: share immutable ASTs, never interpreter globals or market data.
+    private static readonly Lazy<(string Name, Prepared<Acornima.Ast.Module> Module)[]> Modules = new(() =>
     {
-        engine = new Engine(options => options.CancellationToken(token).TimeoutInterval(TimeSpan.FromSeconds(20))
-            .MaxStatements(15000000).LimitMemory(256_000_000));
-        engine.Execute("globalThis.structuredClone = x => JSON.parse(JSON.stringify(x));");
         var assembly = typeof(PlannerEngine).Assembly;
+        var modules = new List<(string, Prepared<Acornima.Ast.Module>)>();
         foreach (var name in new[] { "api.js", "scanner-history.js", "scanner-strategy.js", "market-data.js", "scanner-planner.js" })
         {
             var resource = assembly.GetManifestResourceNames().Single(x => x.EndsWith(".Model." + name, StringComparison.Ordinal));
             using var reader = new StreamReader(assembly.GetManifestResourceStream(resource)!);
-            engine.Modules.Add(name, reader.ReadToEnd().Replace("from \"./", "from \"", StringComparison.Ordinal));
+            modules.Add((name, Engine.PrepareModule(reader.ReadToEnd().Replace("from \"./", "from \"", StringComparison.Ordinal), name)));
         }
-        engine.Modules.Add("runner", """
+        modules.Add(("runner", Engine.PrepareModule(RunnerSource, "runner")));
+        return modules.ToArray();
+    });
+    private const string RunnerSource = """
             import { buildScannerOpportunitiesForSettings } from 'scanner-planner.js';
             import { buildScannerBasket, buildDemandModel, buildSellPriceGuide } from 'scanner-strategy.js';
             export function run(json) {
@@ -30,7 +31,14 @@ public sealed class PlannerEngine : IDisposable
             export function basket(json) { const a = JSON.parse(json); return JSON.stringify(buildScannerBasket(a.rows, {budgetGil:a.budgetGil})); }
             export function demand(json) { const a = JSON.parse(json); return JSON.stringify(buildDemandModel(a.entries, a.options)); }
             export function guide(json) { return JSON.stringify(buildSellPriceGuide(JSON.parse(json))); }
-            """);
+            """;
+    private readonly Engine engine;
+    public PlannerEngine(CancellationToken token)
+    {
+        engine = new Engine(options => options.CancellationToken(token).TimeoutInterval(TimeSpan.FromSeconds(20))
+            .MaxStatements(15000000).LimitMemory(256_000_000));
+        engine.Execute("globalThis.structuredClone = x => JSON.parse(JSON.stringify(x));");
+        foreach (var entry in Modules.Value) engine.Modules.Add(entry.Name, builder => builder.AddModule(entry.Module));
         var module = engine.Modules.Import("runner");
         engine.SetValue("runPlanner", module.Get("run"));
         engine.SetValue("runDemand", module.Get("demand"));

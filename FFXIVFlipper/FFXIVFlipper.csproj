@@ -1,6 +1,6 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.5.2</Version>
+    <Version>0.5.3</Version>
     <Author>CoachCole367</Author>
     <Name>FFXIV Flipper</Name>
     <Punchline>Market research and whole-stack profit estimates.</Punchline>

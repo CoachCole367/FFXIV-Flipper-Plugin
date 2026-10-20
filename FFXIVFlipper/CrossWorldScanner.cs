@@ -15,49 +15,77 @@ public sealed class CrossWorldScanner(MarketClient market)
         var evaluated = 0;
 
         // Network and interpreter work stay off the game thread. Requests share the client's concurrency cap.
-        foreach (var candidate in items)
+        using var prefetch = CancellationTokenSource.CreateLinkedTokenSource(token);
+        Task<Dictionary<uint, ScanMarketItem>>? pending = null;
+        var batches = items.Chunk(10).ToArray();
+        var stop = false;
+        try
         {
-            token.ThrowIfCancellationRequested();
-            progress(new(evaluated, items.Length, $"Checking {candidate.Name}"));
-            try
+            for (var batchIndex = 0; batchIndex < batches.Length; batchIndex++)
             {
-                var supplyTask = market.Supply(settings.BuyDc, candidate.Id, settings.BuyWorlds, token);
-                var homeTask = market.Fetch(settings.HomeId, candidate.Id, true, token, 1000);
-                await Task.WhenAll(supplyTask, homeTask);
-                var supply = await supplyTask; var home = await homeTask;
-                // A missing or capped home history is not a zero-demand forecast.
-                if (!home.History.Complete) { warnings.Add($"{candidate.Name}: {home.History.Status}"); continue; }
-                supply[settings.HomeWorld] = home;
-                var worldMap = supply.ToDictionary(x => x.Key, x => WorldData(x.Key, x.Value));
-                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                var history = new { available = true, rawCount = home.History.Sales.Length, invalidCount = 0, entries = home.History.Sales.Select(s => new { pricePerUnit = s.PricePerUnit, quantity = s.Quantity, hq = s.Hq, timestampSec = s.Timestamp }) };
-                var input = JsonSerializer.Serialize(new {
-                    items = new[] { new { id = candidate.Id } }, homeWorld = settings.HomeWorld, nowSec = now,
-                    listingsByItemWorld = new Dictionary<uint,object> { [candidate.Id] = worldMap },
-                    historyByItemHome = new Dictionary<uint,object> { [candidate.Id] = history },
-                    historyByItemDc = new Dictionary<uint,object>(), itemNameById = new Dictionary<uint,string> { [candidate.Id] = candidate.Name },
-                    lookbackDays = 7, holdingDays = settings.HoldingDays, taxRate = .05, travelFee = 0,
-                    minProfit = settings.MinProfit, minRoi = .04, minTargetProb = .18, qtyConfidence = settings.Confidence,
-                    maxBuyQty = settings.MaxQuantity, targetCapRatio = .14, priceBandRatio = .1, referenceMarket = "home",
-                    historyEntriesRequested = MarketParser.HistoryLimit, budgetGil = settings.Budget, allowStaleData = false
-                });
-                using var engine = new PlannerEngine(token);
-                using var output = JsonDocument.Parse(engine.Run(input));
-                allRows.AddRange(output.RootElement.GetProperty("rows").EnumerateArray().Select(x => x.Clone()));
+                token.ThrowIfCancellationRequested();
+                var batch = await (pending ?? market.ScanBatch(settings.BuyDc, settings.HomeId,
+                    batches[batchIndex].Select(x => x.Id).ToArray(), settings.BuyWorlds, prefetch.Token));
+                pending = null;
+                // A single lookahead overlaps HTTP with calculations without parallel interpreters.
+                if (batchIndex + 1 < batches.Length && !batch.Values.Any(x => x.Error?.Contains("rate limit", StringComparison.OrdinalIgnoreCase) == true))
+                    pending = market.ScanBatch(settings.BuyDc, settings.HomeId,
+                        batches[batchIndex + 1].Select(x => x.Id).ToArray(), settings.BuyWorlds, prefetch.Token);
+                foreach (var candidate in batches[batchIndex])
+                {
+                    token.ThrowIfCancellationRequested();
+                    progress(new(evaluated, items.Length, $"Checking {candidate.Name}"));
+                    try
+                    {
+                        var data = batch[candidate.Id];
+                        if (data.Error != null) throw new InvalidDataException(data.Error);
+                        var supply = data.Supply!; var home = data.Home!;
+                        // A missing or capped home history is not a zero-demand forecast.
+                        if (!home.History.Complete) { warnings.Add($"{candidate.Name}: {home.History.Status}"); continue; }
+                        supply[settings.HomeWorld] = home;
+                        var worldMap = supply.ToDictionary(x => x.Key, x => WorldData(x.Key, x.Value));
+                        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                        var history = new { available = true, rawCount = home.History.Sales.Length, invalidCount = 0, entries = home.History.Sales.Select(s => new { pricePerUnit = s.PricePerUnit, quantity = s.Quantity, hq = s.Hq, timestampSec = s.Timestamp }) };
+                        var input = JsonSerializer.Serialize(new {
+                            items = new[] { new { id = candidate.Id } }, homeWorld = settings.HomeWorld, nowSec = now,
+                            listingsByItemWorld = new Dictionary<uint,object> { [candidate.Id] = worldMap },
+                            historyByItemHome = new Dictionary<uint,object> { [candidate.Id] = history },
+                            historyByItemDc = new Dictionary<uint,object>(), itemNameById = new Dictionary<uint,string> { [candidate.Id] = candidate.Name },
+                            lookbackDays = 7, holdingDays = settings.HoldingDays, taxRate = .05, travelFee = 0,
+                            minProfit = settings.MinProfit, minRoi = .04, minTargetProb = .18, qtyConfidence = settings.Confidence,
+                            maxBuyQty = settings.MaxQuantity, targetCapRatio = .14, priceBandRatio = .1, referenceMarket = "home",
+                            historyEntriesRequested = MarketParser.HistoryLimit, budgetGil = settings.Budget, allowStaleData = false
+                        });
+                        using var engine = new PlannerEngine(token);
+                        using var output = JsonDocument.Parse(engine.Run(input));
+                        allRows.AddRange(output.RootElement.GetProperty("rows").EnumerateArray().Select(x => x.Clone()));
+                    }
+                    catch (OperationCanceledException) when (!token.IsCancellationRequested) { warnings.Add($"{candidate.Name}: market request timed out; item skipped."); }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception) when (token.IsCancellationRequested) { throw new OperationCanceledException(token); }
+                    catch (Exception ex) when (ex is Jint.Runtime.MemoryLimitExceededException or Jint.Runtime.StatementsCountOverflowException or TimeoutException)
+                    {
+                        warnings.Add($"{candidate.Name}: calculation reached its resource limit; no recommendation emitted.");
+                    }
+                    catch (Exception ex) when (ex is HttpRequestException or InvalidDataException or JsonException)
+                    {
+                        warnings.Add($"{candidate.Name}: {ex.Message}");
+                        if (ex.Message.Contains("rate limit", StringComparison.OrdinalIgnoreCase)) { stop = true; break; }
+                    }
+                    finally { evaluated++; }
+                }
+                if (stop) break;
             }
-            catch (OperationCanceledException) when (!token.IsCancellationRequested) { warnings.Add($"{candidate.Name}: market request timed out; item skipped."); }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception) when (token.IsCancellationRequested) { throw new OperationCanceledException(token); }
-            catch (Exception ex) when (ex is Jint.Runtime.MemoryLimitExceededException or Jint.Runtime.StatementsCountOverflowException or TimeoutException)
+        }
+        finally
+        {
+            prefetch.Cancel();
+            // Drain unused lookahead so no request outlives a canceled or failed scan.
+            if (pending != null)
             {
-                warnings.Add($"{candidate.Name}: calculation reached its resource limit; no recommendation emitted.");
+                try { await pending; }
+                catch (Exception) { /* Unused lookahead cannot contribute recommendations. */ }
             }
-            catch (Exception ex) when (ex is HttpRequestException or InvalidDataException or JsonException)
-            {
-                warnings.Add($"{candidate.Name}: {ex.Message}");
-                if (ex.Message.Contains("rate limit", StringComparison.OrdinalIgnoreCase)) break;
-            }
-            finally { evaluated++; }
         }
         token.ThrowIfCancellationRequested();
         var rows = SelectWorthwhile(allRows, settings.MinExpectedProfit);
