@@ -14,7 +14,7 @@ Open `/fflipper` and choose **Find profitable flips**:
 
 The list shows trades meeting your total expected-gain floor. The default 10,000-gil floor is applied before basket selection, keeping tiny trades out of both results and basket. This is separate from the advanced margin-per-planned-unit setting. You can lower the total floor explicitly. The underlying browser demand model is unchanged. Only the suggested basket is selected to fit the combined budget. An empty result means no plan passed the model and filters in this bounded sample. Skipped items and API failures are shown separately. Cancel and changed settings discard old results.
 
-Optional selected-item mode scans the item chosen in **Single item**. Item suggestions close after selection; world controls are real dropdowns. The Single item tab also provides the website's full sell-price tiers and manual whole-stack scenarios. Copy item name is available there and by clicking item names in the purchase journal. Clipboard copy is the implemented search shortcut; direct opening/searching in the game market-board UI is not implemented.
+The plugin has two tabs: **Find profitable flips** and **Purchase journal**. Item names in both tables copy to the clipboard; paste into market-board search with Ctrl+V. The standalone Single item tool and selected-item scan option have been removed. Scanner sell-price estimates remain in the **Sell / unit** column and selected-trade details. Direct opening/searching in the game market-board UI is not implemented.
 
 ## Lightweight purchase journal
 
@@ -36,11 +36,11 @@ Storage errors are displayed. A malformed, oversized or unsupported existing jou
 
 ## Model and limits
 
-Version 0.5.1 embeds the website's unchanged `scanner-strategy.js`, `scanner-planner.js` and `market-data.js` calculation modules using Jint 4.17.0. The two small helper exports are extracted from `api.js` and `scanner-history.js`. Only import names are normalized for the in-memory module loader. The structuredClone compatibility function handles the planner's JSON-compatible purchase-plan data. There is no script download, CLR exposure, website dependency or external JavaScript execution service.
+Version 0.5.2 embeds the website's unchanged `scanner-strategy.js`, `scanner-planner.js` and `market-data.js` calculation modules using Jint 4.17.0. The two small helper exports are extracted from `api.js` and `scanner-history.js`. Only import names are normalized for the in-memory module loader. The structuredClone compatibility function handles the planner's JSON-compatible purchase-plan data. There is no script download, CLR exposure, website dependency or external JavaScript execution service.
 
 The same demand distributions, recency/dispersion models, price-ladder competition, confidence taper, exit-price planning, full-stack purchasing, expected cash recovery, ranking and basket selection run off the game thread. New scans start without learned personal calibration, as does a fresh browser installation. Saved calibration/history learning, Smart Auto profile selection, crafting and vendor scanning are not ported yet.
 
-Data is a bounded supply sample of up to 1,000 cheapest listings across the selected buy DC, plus a separate home-world listing request and up to 2,000 home-world sales in an explicit seven-day window. All DC supply is labeled sampled. Both HQ/NQ are evaluated separately. Capped, failed or malformed home history is skipped entirely. Stale or unknown-age sources are rejected by the browser planner's 24-hour freshness policy; purchased listing review times are checked too. Single-item sell-price guidance uses a stricter six-hour listing-age gate. Uploaded history is not guaranteed complete coverage of real trades.
+Data is a bounded supply sample of up to 1,000 cheapest listings across the selected buy DC, plus a separate home-world listing request and up to 2,000 home-world sales in an explicit seven-day window. All DC supply is labeled sampled. Both HQ/NQ are evaluated separately. Capped, failed or malformed home history is skipped entirely. Stale or unknown-age sources are rejected by the browser planner's 24-hour freshness policy; purchased listing review times are checked too. Uploaded history is not guaranteed complete coverage of real trades.
 
 All purchased stack units count toward upfront capital, even when fewer are forecast to sell. Profit assumes 5% seller tax and excludes buyer tax and travel costs. Verify exact listings and final cost in game. A price gap is not guaranteed realized profit. The acquisition sample may miss smaller stacks or other profitable items. No automated buying, traveling, listing or repricing is performed.
 
@@ -65,7 +65,7 @@ Packaged output is under `FFXIVFlipper/bin/Release/FFXIVFlipper/latest.zip`. Thi
 - 25 frozen browser parity fixtures compare numerical model output, plans, budgets, exact listing identifiers and quality; includes positive NQ/HQ and rejection cases.
 - Nineteen scanner integration checks exercise automatic discovery, seller-world history, full-stack cost, budget, sampled supply, cancellation, missing history, wrong-DC rejection, timeout and rate-limit handling, total-gain thresholds, ordering, missing-value rejection and basket exclusion.
 - Live scans exercised current API data. The final ten-item run (nine discovered items plus a known heavier calculation case) completed with one qualifying plan and no errors or skipped items. These are snapshot observations, not future profit guarantees.
-- The user verified 0.3.0 scanning and dropdowns in game. The purchase event wiring, journal interactions, clipboard shortcut and new sell-price column need in-game verification. Version 0.4.0 replaces the long form with compact controls, an opaque window, a comparison table, budget summary and one selected-trade detail panel; the new layout still requires visual/interaction verification in game.
+- The user verified 0.3.0 scanning and dropdowns in game. The purchase event wiring, journal interactions, clipboard shortcut and new sell-price column need in-game verification. The scanner layout replaces the long form with compact controls, an opaque window, a comparison table, budget summary and one selected-trade detail panel; the two-tab interface still requires visual/interaction verification in game.
 
 Regenerate browser reference fixtures only when deliberately updating the copied model, with Node available for development:
 
@@ -91,6 +91,7 @@ dotnet run --project tests/Economics.Tests.csproj -- --scan-live
 - Publish a tested release and installation feed.
 
 Jint and Acornima license notices are in `licenses/`. Sources: https://dalamud.dev/plugin-development/ and https://docs.universalis.app/ . Official Dalamud repository submissions require human review and compliance with its AI usage policy; this project is not represented as already approved.
+
 
 
 

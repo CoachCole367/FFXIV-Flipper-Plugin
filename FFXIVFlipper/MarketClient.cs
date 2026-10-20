@@ -12,7 +12,7 @@ public sealed class MarketClient : IDisposable
     {
         http = handler == null ? new() : new(handler);
         http.Timeout = TimeSpan.FromSeconds(25);
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("FFXIVFlipper/0.5.1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("FFXIVFlipper/0.5.2");
     }
     public async Task<MarketSnapshot> Fetch(uint world, uint item, bool withHistory, CancellationToken token, int listingLimit = 100)
     {
@@ -96,6 +96,7 @@ public sealed class MarketClient : IDisposable
     }
     public void Dispose() => http.Dispose();
 }
+
 
 
 

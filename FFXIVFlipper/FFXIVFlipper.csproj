@@ -1,16 +1,17 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.5.1</Version>
+    <Version>0.5.2</Version>
     <Author>CoachCole367</Author>
     <Name>FFXIV Flipper</Name>
     <Punchline>Market research and whole-stack profit estimates.</Punchline>
-    <Description>In-game market research using Universalis. Cross-world flip scanning with the preserved demand model, exact-stack plans, budget baskets and sell-price tiers.</Description>
+    <Description>In-game market research using Universalis. Profitable cross-world flips with home-world sell prices, exact-stack plans, budget baskets and a bounded purchase journal.</Description>
     <RepoUrl>https://github.com/CoachCole367/FFXIV-Flipper-Plugin</RepoUrl>
     <Tags>market;economy;crafting</Tags>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 <ItemGroup><PackageReference Include="Jint" Version="4.17.0" /><EmbeddedResource Include="Model\*.js" /><Content Include="..\licenses\*.txt" Link="licenses\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" /></ItemGroup></Project>
+
 
 
 

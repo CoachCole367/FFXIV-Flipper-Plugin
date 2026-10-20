@@ -5,9 +5,7 @@ public sealed class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 1;
     public bool TrackPurchases { get; set; } = true;
-    public string BuyWorld { get; set; } = "";
     public string SellWorld { get; set; } = "";
-    public bool Hq { get; set; }
     public string ScanDc { get; set; } = "";
     public int Budget { get; set; } = 500000;
     public int ScanItems { get; set; } = 50;
@@ -17,6 +15,7 @@ public sealed class Configuration : IPluginConfiguration
     public int MinProfit { get; set; } = 1000;
     public int MinExpectedProfit { get; set; } = 10000;
 }
+
 
 
 

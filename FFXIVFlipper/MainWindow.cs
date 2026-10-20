@@ -10,25 +10,8 @@ public sealed class MainWindow : Window, IDisposable
     private readonly TradeJournal journal;
     private readonly System.Action clearPendingPurchases;
     private readonly MarketClient market = new();
-    private CancellationTokenSource? cancellation;
-    private Task<(MarketSnapshot Buy, MarketSnapshot Sell)>? pending;
-    private MarketSnapshot? buy;
-    private MarketSnapshot? sell;
-    private string search = "";
-    private bool showSearchResults;
     private (uint Id, string Name)[]? worldOptions;
-    private (uint Id, string Name)[] searchResults = [];
-    private string buyWorld;
     private string sellWorld;
-    private bool hq;
-    private uint item;
-    private string itemName = "Select an item";
-    private string status = "";
-    private int sellPrice;
-    private int soldUnits = 1;
-    private Task<JsonElement[]>? guideTask;
-    private JsonElement[]? modelGuides;
-    private string guideStatus = "";
     private CancellationTokenSource? scanCancellation;
     private Task<ScanResult>? scanTask;
     private volatile ScanProgress scanProgress = new(0, 0, "Ready");
@@ -45,7 +28,6 @@ public sealed class MainWindow : Window, IDisposable
     private int selectedOpportunity = -1;
     private string clipboardNotice = "";
     private long clipboardNoticeUntil;
-    private bool scanSelectedOnly;
     private int scanRunId;
     private Dictionary<uint, string>? itemCatalog;
     private long journalRevision = -1;
@@ -67,22 +49,12 @@ public sealed class MainWindow : Window, IDisposable
     public MainWindow(Configuration config, TradeJournal journal, System.Action clearPendingPurchases) : base("FFXIV Flipper")
     {
         this.config = config; this.journal = journal; this.clearPendingPurchases = clearPendingPurchases;
-        buyWorld = config.BuyWorld;
         sellWorld = config.SellWorld;
-        hq = config.Hq;
         scanDc = config.ScanDc; budget = config.Budget; scanItems = config.ScanItems; holdingDays = config.HoldingDays;
         maxQuantity = config.MaxQuantity; confidence = config.ConfidencePercent; minProfit = config.MinProfit; minExpectedProfit = config.MinExpectedProfit;
         Size = new Vector2(1040, 740);
         SizeConstraints = new WindowSizeConstraints { MinimumSize = new Vector2(800, 600), MaximumSize = new Vector2(float.MaxValue, float.MaxValue) };
         SizeCondition = ImGuiCond.FirstUseEver;
-    }
-    private void Invalidate()
-    {
-        cancellation?.Cancel(); cancellation?.Dispose(); cancellation = null;
-        if (pending != null) _ = pending.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
-        pending = null; buy = sell = null; modelGuides = null; guideStatus = "";
-        if (guideTask != null) _ = guideTask.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
-        guideTask = null; status = "";
     }
     public override void PreDraw() => ImGui.SetNextWindowBgAlpha(0.98f);
     public override void Draw()
@@ -92,109 +64,9 @@ public sealed class MainWindow : Window, IDisposable
         if (ImGui.BeginTabBar("Flipper tools"))
         {
             if (ImGui.BeginTabItem("Find profitable flips")) { DrawScanner(); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem("Single item")) { DrawComparison(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Purchase journal")) { DrawJournal(); ImGui.EndTabItem(); }
             ImGui.EndTabBar();
         }
-    }
-    private void DrawComparison()
-    {
-        if (pending is { IsCompleted: true })
-        {
-            try { var result = pending.GetAwaiter().GetResult(); buy = result.Buy; sell = result.Sell; status = "Market snapshots loaded."; BeginGuide(); }
-            catch (OperationCanceledException) { status = "Request canceled or timed out. Try again."; }
-            catch (Exception ex) { status = $"Market request failed: {ex.Message}"; Plugin.Log.Warning(ex, "Universalis request failed"); }
-            pending = null;
-        }
-        ImGui.TextWrapped("Single-item analysis. Confirm uploaded listings in game before buying.");
-        if (ImGui.InputText("Item search", ref search, 100))
-        {
-            Invalidate();
-            // Search once per edit, rather than scanning the item sheet on every game frame.
-            showSearchResults = search.Length >= 2;
-            searchResults = search.Length < 2 ? [] : Plugin.Data.GetExcelSheet<Item>()
-                .Where(x => x.ItemSearchCategory.RowId != 0 && x.Name.ToString().Contains(search, StringComparison.OrdinalIgnoreCase))
-                .Take(25).Select(x => (x.RowId, x.Name.ToString())).ToArray();
-        }
-        if (showSearchResults)
-        {
-            if (ImGui.BeginChild("Item results", new Vector2(0, 100), true))
-                foreach (var row in searchResults)
-                    if (ImGui.Selectable($"{row.Name}##{row.Id}", item == row.Id)) { Invalidate(); if (scanSelectedOnly) InvalidateScan(); item = row.Id; itemName = row.Name; search = row.Name; showSearchResults = false; sellPrice = 0; }
-            ImGui.EndChild();
-        }
-        ImGui.TextUnformatted($"Item: {itemName} ({item})");
-        ImGui.BeginDisabled(item == 0); ImGui.SameLine(); if (ImGui.SmallButton("Copy item name")) CopyMarketName(item); ImGui.EndDisabled();
-        ClipboardHint();
-        if (DrawWorld("Buy world", ref buyWorld)) Invalidate();
-        if (DrawWorld("Sell world", ref sellWorld)) { Invalidate(); InvalidateScan(); }
-        if (ImGui.Checkbox("HQ", ref hq)) Invalidate();
-        ImGui.BeginDisabled(item == 0 || string.IsNullOrWhiteSpace(buyWorld) || string.IsNullOrWhiteSpace(sellWorld) || pending != null);
-        var load = ImGui.Button("Load market comparison");
-        ImGui.EndDisabled();
-        if (load) StartRequest();
-        if (pending != null) { ImGui.SameLine(); if (ImGui.Button("Cancel")) { Invalidate(); status = "Canceled."; } }
-        ImGui.TextWrapped(status);
-        if (buy == null || sell == null) return;
-        DrawSnapshot($"Buy - {buyWorld}", buy); DrawSnapshot($"Sell - {sellWorld}", sell);
-        ImGui.Separator();
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        if (guideTask is { IsCompleted: true })
-        {
-            try { modelGuides = guideTask.GetAwaiter().GetResult(); guideStatus = modelGuides.Length == 0 ? "No supported sell-price plans from this history." : "Website sell-price model loaded."; }
-            catch (Exception ex) { guideStatus = $"Price analysis unavailable: {ex.Message}"; Plugin.Log.Warning(ex, "Price guide failed"); }
-            guideTask = null;
-        }
-        ImGui.TextUnformatted("Sell-world sales and price guidance");
-        ImGui.TextWrapped(sell.History.Status);
-        ImGui.TextWrapped(guideStatus);
-        if (modelGuides != null)
-        {
-            foreach (var plan in modelGuides)
-            {
-                ImGui.TextWrapped($"{Text(plan,"exitLabel")}: {Number(plan,"targetSell"):N0} gil/unit; sale within {holdingDays} days: {Number(plan,"sellWithinWindowProbability"):P0}; first sale estimate: {Format(plan,"estimatedDaysToFirstSale","N1")} days; {Text(plan,"confidenceLabel")} evidence.");
-                if (ImGui.SmallButton($"Use {Text(plan,"exitLabel")} price")) sellPrice = (int)Number(plan,"targetSell");
-            }
-            ImGui.TextWrapped("Probabilities and times are model estimates from sampled competition and sales, not guaranteed outcomes.");
-        }
-        foreach (var sale in sell.History.Sales.Where(x => x.Hq == hq).Take(5))
-            ImGui.TextUnformatted($"Sold {sale.Quantity} at {sale.PricePerUnit:N0} gil ({Math.Max(0, now - sale.Timestamp) / 3600} hours ago)");
-        ImGui.Separator();
-        ImGui.TextWrapped("Manual scenario. Assumes 5% seller tax; purchase tax and travel costs excluded. Units sold are your input, not a forecast.");
-        ImGui.InputInt("Resale gil per unit", ref sellPrice);
-        ImGui.InputInt("Units sold", ref soldUnits);
-        var listing = buy.Listings.FirstOrDefault(x => x.Hq == hq);
-        if (listing == null) { ImGui.TextUnformatted("No matching buy listing in this sample."); return; }
-        if (!MarketAnalysis.IsFresh(buy.LastUploadTime, now)) ImGui.TextWrapped("Buy data is stale or has unknown age. Refresh and verify the stack in game.");
-        ImGui.TextUnformatted($"Cheapest sampled stack: {listing.Quantity} x {listing.PricePerUnit:N0} gil; upfront {listing.Quantity * (decimal)listing.PricePerUnit:N0} gil");
-        var breakEven = Math.Ceiling(listing.PricePerUnit / .95m);
-        ImGui.TextUnformatted($"Break-even per unit if the entire stack sells: {breakEven:N0} gil");
-        if (sellPrice >= 0 && soldUnits >= 0 && soldUnits <= listing.Quantity)
-        {
-            var gain = StackEconomics.CashGain(listing.PricePerUnit, listing.Quantity, sellPrice, soldUnits);
-            ImGui.TextUnformatted($"Conditional cash gain: {gain:N0} gil; leftover units: {listing.Quantity - soldUnits}");
-            if (gain < 0) ImGui.TextWrapped("This scenario does not recover the full stack purchase cost.");
-        }
-        else ImGui.TextWrapped("Enter a nonnegative price and units sold between zero and the full stack size.");
-    }
-    private void BeginGuide()
-    {
-        if (sell == null) return;
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        if (!sell.History.Complete || !MarketAnalysis.IsFresh(sell.LastUploadTime, now)) { guideStatus = "No guidance: home evidence is incomplete, stale or has unknown age."; return; }
-        var quality = hq;
-        var input = JsonSerializer.Serialize(new {
-            currentListings = sell.Listings.Where(x => x.Hq == quality).Select(x => new { pricePerUnit = x.PricePerUnit, quantity = x.Quantity }),
-            salesEntries = sell.History.Sales.Where(x => x.Hq == quality).Select(x => new { pricePerUnit = x.PricePerUnit, quantity = x.Quantity, timestampSec = x.Timestamp }),
-            lookbackDays = 7, sellWindowDays = holdingDays, nowSec = now, targetCapRatio = .14, priceBandRatio = .1
-        });
-        var token = cancellation?.Token ?? default;
-        guideStatus = "Calculating demand and sell-price tiers...";
-        guideTask = Task.Run(() => {
-            using var engine = new PlannerEngine(token);
-            using var output = JsonDocument.Parse(engine.Guide(input));
-            return output.RootElement.EnumerateArray().Select(x => x.Clone()).ToArray();
-        }, token);
     }
     private bool DrawWorld(string label, ref string selected)
     {
@@ -208,32 +80,6 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.EndCombo();
         }
         return changed;
-    }
-    private void StartRequest()
-    {
-        Invalidate();
-        var worlds = Plugin.Data.GetExcelSheet<World>();
-        var source = worlds.FirstOrDefault(x => string.Equals(x.Name.ToString(), buyWorld.Trim(), StringComparison.OrdinalIgnoreCase));
-        var destination = worlds.FirstOrDefault(x => string.Equals(x.Name.ToString(), sellWorld.Trim(), StringComparison.OrdinalIgnoreCase));
-        if (source.RowId == 0 || destination.RowId == 0) { status = "Enter individual world names, such as Exodus or Leviathan. Data centers are not valid sell worlds."; return; }
-        buyWorld = config.BuyWorld = source.Name.ToString(); sellWorld = config.SellWorld = destination.Name.ToString(); config.Hq = hq;
-        Plugin.PluginInterface.SavePluginConfig(config);
-        cancellation = new(); pending = FetchPair(source.RowId, destination.RowId, item, cancellation.Token); status = "Loading listings and seven-day sell-world sales...";
-    }
-    private async Task<(MarketSnapshot, MarketSnapshot)> FetchPair(uint source, uint destination, uint id, CancellationToken token)
-    {
-        if (source == destination) { var snapshot = await market.Fetch(source, id, true, token); return (snapshot, snapshot); }
-        var sourceTask = market.Fetch(source, id, false, token);
-        var destinationTask = market.Fetch(destination, id, true, token);
-        await Task.WhenAll(sourceTask, destinationTask);
-        return (await sourceTask, await destinationTask);
-    }
-    private void DrawSnapshot(string label, MarketSnapshot snapshot)
-    {
-        var match = snapshot.Listings.Where(x => x.Hq == hq).ToArray();
-        var age = snapshot.LastUploadTime > 0 ? $"{Math.Max(0, (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - snapshot.LastUploadTime) / 60000)} minutes old" : "age unknown";
-        ImGui.TextUnformatted($"{label}: {match.Length} matching listings sampled; {age}");
-        foreach (var row in match.Take(3)) ImGui.TextUnformatted($"  {row.Quantity} units at {row.PricePerUnit:N0} gil each");
     }
     private void InvalidateScan()
     {
@@ -263,7 +109,7 @@ public sealed class MainWindow : Window, IDisposable
         if (ImGui.BeginTable("Scan controls", 3, ImGuiTableFlags.SizingStretchSame))
         {
             ImGui.TableNextColumn(); FieldLabel("Sell on");
-            if (DrawWorld("##ScanHome", ref sellWorld)) { Invalidate(); InvalidateScan(); scanDc = ""; }
+            if (DrawWorld("##ScanHome", ref sellWorld)) { InvalidateScan(); scanDc = ""; }
             home = Plugin.Data.GetExcelSheet<World>().FirstOrDefault(x => x.Name.ToString() == sellWorld);
             ImGui.TableNextColumn(); FieldLabel("Buy in data center");
             var dcs = home.RowId == 0 ? [] : Plugin.Data.GetExcelSheet<World>()
@@ -296,16 +142,13 @@ public sealed class MainWindow : Window, IDisposable
             if (ImGui.BeginTable("Extra scan controls", 3, ImGuiTableFlags.SizingStretchSame))
             {
                 ImGui.TableNextColumn(); FieldLabel("Sell within days (1-7)");
-                if (ImGui.InputInt("##HoldDays", ref holdingDays)) { InvalidateScan(); Invalidate(); }
+                if (ImGui.InputInt("##HoldDays", ref holdingDays)) { InvalidateScan(); }
                 ImGui.TableNextColumn(); FieldLabel("Minimum sell chance % (1-99)");
                 if (ImGui.InputInt("##Confidence", ref confidence, 5, 10)) InvalidateScan();
                 ImGui.TableNextColumn(); FieldLabel("Planned resale units (1-100)");
                 if (ImGui.InputInt("##MaxQty", ref maxQuantity)) InvalidateScan();
                 ImGui.TableNextColumn(); FieldLabel("Minimum margin / planned unit");
                 if (ImGui.InputInt("##MinUnitMargin", ref minProfit, 500, 1000)) InvalidateScan();
-                ImGui.TableNextColumn();
-                if (ImGui.Checkbox("Selected item only", ref scanSelectedOnly)) InvalidateScan();
-                if (scanSelectedOnly) ImGui.TextWrapped(item > 0 ? itemName : "Choose an item in Single item.");
                 ImGui.EndTable();
             }
             ImGui.TextDisabled("HQ and NQ checked separately. Minimum ROI 4%. DC travel access may vary.");
@@ -330,7 +173,7 @@ public sealed class MainWindow : Window, IDisposable
     }
     private bool ValidScan(uint homeId) => homeId != 0 && budget > 0 && scanItems is >= 1 and <= 200
         && holdingDays is >= 1 and <= 7 && confidence is >= 1 and <= 99 && maxQuantity is >= 1 and <= 100
-        && minProfit >= 0 && minExpectedProfit >= 0 && (!scanSelectedOnly || item > 0);
+        && minProfit >= 0 && minExpectedProfit >= 0;
     private void StartScan(uint homeId)
     {
         InvalidateScan();
@@ -342,10 +185,9 @@ public sealed class MainWindow : Window, IDisposable
             .ToDictionary(x => x.RowId, x => x.Name.ToString());
         var catalog = itemCatalog ??= Plugin.Data.GetExcelSheet<Item>().Where(x => x.ItemSearchCategory.RowId != 0).ToDictionary(x => x.RowId, x => x.Name.ToString());
         var settings = new ScanSettings(homeId, sellWorld, scanDc, worlds, budget, scanItems, holdingDays, confidence / 100d, maxQuantity, minProfit, minExpectedProfit);
-        var manual = scanSelectedOnly ? new[] { new ScanItem(item, itemName) } : [];
         scanCancellation = new(); var token = scanCancellation.Token; var runId = scanRunId;
         scanProgress = new(0, 0, "Finding recently updated items...");
-        scanTask = Task.Run(() => new CrossWorldScanner(market).Run(settings, catalog, manual,
+        scanTask = Task.Run(() => new CrossWorldScanner(market).Run(settings, catalog, [],
             p => { if (Volatile.Read(ref scanRunId) == runId) scanProgress = p; }, token), token);
     }
     private void DrawScanResults()
@@ -584,8 +426,9 @@ public sealed class MainWindow : Window, IDisposable
     private static string Format(JsonElement row, string field, string format) => row.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetDouble().ToString(format) : "N/A";
     private static double Number(JsonElement row, string field) => row.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetDouble() : 0;
     private static string Text(JsonElement row, string field) => row.TryGetProperty(field, out var value) ? value.ToString() : "";
-    public void Dispose() { InvalidateScan(); Invalidate(); market.Dispose(); }
+    public void Dispose() { InvalidateScan(); market.Dispose(); }
 }
+
 
 
 
