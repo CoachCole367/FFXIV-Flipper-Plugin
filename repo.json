@@ -1,0 +1,27 @@
+[
+  {
+    "Author": "CoachCole367",
+    "Name": "FFXIV Flipper",
+    "InternalName": "FFXIVFlipper",
+    "AssemblyVersion": "0.6.0.0",
+    "Description": "In-game market research using Universalis. Profitable cross-world flips with home-world sell prices, exact-stack plans, budget baskets and a bounded purchase journal.",
+    "ApplicableVersion": "any",
+    "RepoUrl": "https://github.com/CoachCole367/FFXIV-Flipper-Plugin",
+    "Tags": [
+      "market",
+      "economy",
+      "crafting"
+    ],
+    "DalamudApiLevel": 15,
+    "LoadRequiredState": 0,
+    "LoadSync": false,
+    "CanUnloadAsync": false,
+    "LoadPriority": 0,
+    "Punchline": "Market research and whole-stack profit estimates.",
+    "AcceptsFeedback": true,
+    "DownloadLinkInstall": "https://github.com/CoachCole367/FFXIV-Flipper-Plugin/releases/download/v0.6.0/FFXIVFlipper-0.6.0.zip",
+    "DownloadLinkUpdate": "https://github.com/CoachCole367/FFXIV-Flipper-Plugin/releases/download/v0.6.0/FFXIVFlipper-0.6.0.zip",
+    "LastUpdate": 1792530282,
+    "Changelog": "Sortable tables, bounded saved watchlists, balanced discovery and rotating active-market sweeps."
+  }
+]

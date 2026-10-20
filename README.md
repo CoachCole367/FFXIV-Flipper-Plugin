@@ -9,8 +9,8 @@ Open `/fflipper` and choose **Find profitable flips**:
 1. Choose your home / sell world (automatically filled from your character when no world is saved).
 2. Choose the buy data center. Available DCs are in your home world's region; travel restrictions may still apply.
 3. Enter available gil, number of items (default 50, maximum 200) and minimum expected gain per trade (default 10,000 gil).
-4. Click **Scan for profitable flips**. Automatic discovery uses recently updated Universalis items; no item search is required.
-5. Compare opportunities in the table, sorted by total expected gain. Click an item name to select its row and copy the raw localized name to the system clipboard (without the HQ/NQ suffix). Paste it into market-board search with Ctrl+V. The **Sell / unit** column shows the suggested home-world listing price before seller tax; the details panel contains exact full stacks and market evidence. The Basket column marks trades selected within the combined budget.
+4. Choose a scan source: Balanced discovery, Active market sweep, Saved watchlist or Recently updated. Click **Scan for flips**; no item search is required unless you are adding to a watchlist.
+5. Compare opportunities in the table. Expected gain is the default order; click any column heading to sort and click again to reverse. Click an item name to select its row and copy the raw localized name to the system clipboard (without the HQ/NQ suffix). Paste it into market-board search with Ctrl+V. The **Sell / unit** column shows the suggested home-world listing price before seller tax; the details panel contains exact full stacks and market evidence. The Basket column marks trades selected within the combined budget.
 
 The list shows trades meeting your total expected-gain floor. The default 10,000-gil floor is applied before basket selection, keeping tiny trades out of both results and basket. This is separate from the advanced margin-per-planned-unit setting. You can lower the total floor explicitly. The underlying browser demand model is unchanged. Only the suggested basket is selected to fit the combined budget. An empty result means no plan passed the model and filters in this bounded sample. Skipped items and API failures are shown separately. Cancel and changed settings discard old results.
 
@@ -84,11 +84,11 @@ dotnet run --project tests/Economics.Tests.csproj -- --scan-live
 
 ## Remaining work
 
-- Verify the redesigned 0.4.0 UI in a running game; profile in-game responsiveness.
+- Verify in-game watchlist persistence and real purchase/sale events; scan, sorting, cancellation, responsiveness and journal persistence were verified by the user.
 - Add compatible learning/calibration; optional retainer-sale automation remains separate from the bounded purchase journal.
 - Consider selective retries for temporary API failures; keep the shared request limit and rate-limit cooldown.
 - Port crafting/vendor tools if desired.
-- Publish a tested release and installation feed.
+- Continue validating future releases against the custom update feed and retain explicit user-data migration checks.
 
 Jint and Acornima license notices are in `licenses/`. Sources: https://dalamud.dev/plugin-development/ and https://docs.universalis.app/ . Official Dalamud repository submissions require human review and compliance with its AI usage policy; this project is not represented as already approved.
 
@@ -140,3 +140,4 @@ Once published, add https://raw.githubusercontent.com/CoachCole367/FFXIV-Flipper
 Optional full discovery validation: dotnet run --project tests/Economics.Tests.csproj -c Release -- --discovery-live.
 
 Sources: https://docs.universalis.app/ and https://dalamud.dev/plugin-publishing/custom-repositories/.
+Published 0.6.0: https://github.com/CoachCole367/FFXIV-Flipper-Plugin/releases/tag/v0.6.0. The public release ZIP was downloaded without authentication and matched the locally validated SHA-256. The cloud build for the tagged commit passed; .gitattributes preserves exact model source bytes on Windows checkouts.
