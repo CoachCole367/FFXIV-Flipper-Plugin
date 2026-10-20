@@ -1,6 +1,6 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <Author>CoachCole367</Author>
     <Name>FFXIV Flipper</Name>
     <Punchline>Market research and whole-stack profit estimates.</Punchline>
@@ -11,6 +11,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 <ItemGroup><PackageReference Include="Jint" Version="4.17.0" /><EmbeddedResource Include="Model\*.js" /><Content Include="..\licenses\*.txt" Link="licenses\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" /></ItemGroup></Project>
+
 
 
 

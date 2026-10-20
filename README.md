@@ -16,9 +16,27 @@ The list shows trades meeting your total expected-gain floor. The default 10,000
 
 Optional selected-item mode scans the item chosen in **Single item**. Item suggestions close after selection; world controls are real dropdowns. The Single item tab also provides the website's full sell-price tiers and manual whole-stack scenarios.
 
+## Lightweight purchase journal
+
+Open **Purchase journal** in `/fflipper`. Automatic purchase tracking is enabled by default and can be switched off. Only future successful market-board purchases made while the plugin is active can be captured. NPC purchases, trades, past purchases and offline activity are not imported.
+
+The plugin matches Dalamud's outgoing purchase details to the server purchase event, checking item, quantity, character, world and a 30-second time window. It preserves HQ/NQ, actual listed unit price and purchase tax. Requests alone, mismatched/expired events and duplicate listings do not become purchases. Ambiguous overlapping requests are skipped rather than guessed. No inventory polling, market requests or forecast snapshots are needed for the journal. The event pair still needs verification with a real in-game purchase on this client.
+
+Sales are **manual actual-sale updates** against a purchase: select the lot, enter quantity sold and total gil received after seller tax, review, then confirm. Partial sales accumulate on that lot rather than creating an unbounded event history. Realized profit subtracts only the matched portion of acquisition cost; net cash recovery subtracts the full purchase. These are distinct, and retained unsold inventory is never counted as profit. There is no automatic retainer-sale detection or model learning from these records yet.
+
+Size and resource bounds:
+
+- One minified `purchase-journal.json` in the plugin configuration folder: newest **1,000 purchases globally across characters**, with a **90-day age limit** checked on load/write, and a **512 KB hard file limit**. Older lots, including their summarized sale information, are removed. Totals cover retained records, not lifetime earnings or a permanent inventory ledger.
+- Only IDs and numeric trade details are stored; item/world names resolve from local game data. Views and exports show the current character only. Local character IDs never go to Universalis or GitHub.
+- Event-triggered background saves coalesce changes. Writes use one fixed temporary filename and replace the prior journal; no numbered backups or growing append log. Saves flush when the plugin unloads.
+- **Export CSV** replaces `purchase-journal.csv` in the same folder. Each journal/export is bounded to 512 KB; the fixed temporary files are bounded too, so at most four managed files exist (2 MB combined upper bound including interrupted-write remnants). Any copies you make elsewhere are outside this retention policy.
+- Journal UI shows 50 rows per page and keeps at most 1,000 cached item names. In the synthetic capacity test, 1,000 purchase records occupied **177,964 bytes**, with ingestion and final save completing in about 64 ms. This is a synthetic local result, not an in-game performance measurement.
+
+Storage errors are displayed. A malformed, oversized or unsupported existing journal is preserved and is not silently overwritten. Recording stays read-only until that file is repaired or deliberately removed outside the plugin. The repository ignores journal/export filenames; no personal trade data is part of the source repository.
+
 ## Model and limits
 
-Version 0.4.0 embeds the website's unchanged `scanner-strategy.js`, `scanner-planner.js` and `market-data.js` calculation modules using Jint 4.17.0. The two small helper exports are extracted from `api.js` and `scanner-history.js`. Only import names are normalized for the in-memory module loader. The structuredClone compatibility function handles the planner's JSON-compatible purchase-plan data. There is no script download, CLR exposure, website dependency or external JavaScript execution service.
+Version 0.5.0 embeds the website's unchanged `scanner-strategy.js`, `scanner-planner.js` and `market-data.js` calculation modules using Jint 4.17.0. The two small helper exports are extracted from `api.js` and `scanner-history.js`. Only import names are normalized for the in-memory module loader. The structuredClone compatibility function handles the planner's JSON-compatible purchase-plan data. There is no script download, CLR exposure, website dependency or external JavaScript execution service.
 
 The same demand distributions, recency/dispersion models, price-ladder competition, confidence taper, exit-price planning, full-stack purchasing, expected cash recovery, ranking and basket selection run off the game thread. New scans start without learned personal calibration, as does a fresh browser installation. Saved calibration/history learning, Smart Auto profile selection, crafting and vendor scanning are not ported yet.
 
@@ -43,11 +61,11 @@ Packaged output is under `FFXIVFlipper/bin/Release/FFXIVFlipper/latest.zip`. Thi
 
 ## Validation
 
-- Clean release build; 31 market regressions plus three embedded-source hash checks.
+- Clean release build; 31 market regressions plus three embedded-source hash checks and 39 journal checks (117 checks overall).
 - 25 frozen browser parity fixtures compare numerical model output, plans, budgets, exact listing identifiers and quality; includes positive NQ/HQ and rejection cases.
 - Nineteen scanner integration checks exercise automatic discovery, seller-world history, full-stack cost, budget, sampled supply, cancellation, missing history, wrong-DC rejection, timeout and rate-limit handling, total-gain thresholds, ordering, missing-value rejection and basket exclusion.
 - Live scans exercised current API data. The final ten-item run (nine discovered items plus a known heavier calculation case) completed with one qualifying plan and no errors or skipped items. These are snapshot observations, not future profit guarantees.
-- The user verified 0.3.0 scanning and dropdowns in game. Version 0.4.0 replaces the long form with compact controls, an opaque window, a comparison table, budget summary and one selected-trade detail panel; the new layout still requires visual/interaction verification in game.
+- The user verified 0.3.0 scanning and dropdowns in game. The new purchase event wiring and journal interactions need in-game verification. Version 0.4.0 replaces the long form with compact controls, an opaque window, a comparison table, budget summary and one selected-trade detail panel; the new layout still requires visual/interaction verification in game.
 
 Regenerate browser reference fixtures only when deliberately updating the copied model, with Node available for development:
 
@@ -67,11 +85,13 @@ dotnet run --project tests/Economics.Tests.csproj -- --scan-live
 ## Remaining work
 
 - Verify the redesigned 0.4.0 UI in a running game; profile in-game responsiveness.
-- Add saved watchlists/trade history and compatible learning/calibration.
+- Add saved watchlists and compatible learning/calibration; optional retainer-sale automation remains separate from the bounded purchase journal.
 - Expand candidate discovery and request batching/deduplication/retry handling.
 - Port crafting/vendor tools if desired.
 - Publish a tested release and installation feed.
 
 Jint and Acornima license notices are in `licenses/`. Sources: https://dalamud.dev/plugin-development/ and https://docs.universalis.app/ . Official Dalamud repository submissions require human review and compliance with its AI usage policy; this project is not represented as already approved.
+
+
 
 

@@ -7,6 +7,8 @@ namespace FFXIVFlipper;
 public sealed class MainWindow : Window, IDisposable
 {
     private readonly Configuration config;
+    private readonly TradeJournal journal;
+    private readonly System.Action clearPendingPurchases;
     private readonly MarketClient market = new();
     private CancellationTokenSource? cancellation;
     private Task<(MarketSnapshot Buy, MarketSnapshot Sell)>? pending;
@@ -44,9 +46,25 @@ public sealed class MainWindow : Window, IDisposable
     private bool scanSelectedOnly;
     private int scanRunId;
     private Dictionary<uint, string>? itemCatalog;
-    public MainWindow(Configuration config) : base("FFXIV Flipper")
+    private long journalRevision = -1;
+    private ulong journalCharacter;
+    private PurchaseLot[] journalRows = [];
+    private long journalUnsoldUnits;
+    private decimal journalRealizedProfit;
+    private decimal journalCashRecovered;
+    private Guid journalSelection;
+    private int journalPage;
+    private int saleQuantity = 1;
+    private int saleNetReceived;
+    private PurchaseLot? saleToConfirm;
+    private int reviewedSaleQuantity;
+    private int reviewedSaleNet;
+    private string journalMessage = "";
+    private Task? exportTask;
+    private readonly Dictionary<uint, string> journalItemNames = [];
+    public MainWindow(Configuration config, TradeJournal journal, System.Action clearPendingPurchases) : base("FFXIV Flipper")
     {
-        this.config = config;
+        this.config = config; this.journal = journal; this.clearPendingPurchases = clearPendingPurchases;
         buyWorld = config.BuyWorld;
         sellWorld = config.SellWorld;
         hq = config.Hq;
@@ -73,6 +91,7 @@ public sealed class MainWindow : Window, IDisposable
         {
             if (ImGui.BeginTabItem("Find profitable flips")) { DrawScanner(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Single item")) { DrawComparison(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("Purchase journal")) { DrawJournal(); ImGui.EndTabItem(); }
             ImGui.EndTabBar();
         }
     }
@@ -416,11 +435,133 @@ public sealed class MainWindow : Window, IDisposable
     private static void FieldLabel(string text) { ImGui.TextUnformatted(text); ImGui.SetNextItemWidth(-1); }
     private static void Hint(string text) { if (ImGui.IsItemHovered()) { ImGui.BeginTooltip(); ImGui.TextUnformatted(text); ImGui.EndTooltip(); } }
     private static void ProfitText(double amount) => ImGui.TextColored(amount > 0 ? new Vector4(.48f,.85f,.58f,1) : new Vector4(.8f,.8f,.8f,1), $"{(amount > 0 ? "+" : "")}{amount:N0}");
+    private void DrawJournal()
+    {
+        ImGui.TextUnformatted("PURCHASE JOURNAL");
+        var tracking = config.TrackPurchases;
+        if (ImGui.Checkbox("Automatically log market-board purchases", ref tracking))
+        {
+            clearPendingPurchases(); config.TrackPurchases = tracking; Plugin.PluginInterface.SavePluginConfig(config);
+        }
+        ImGui.TextDisabled("Records future confirmed purchases. No inventory polling or market snapshots.");
+        ImGui.TextDisabled($"Keeps the newest {TradeJournal.MaxEntries:N0} purchases for up to {TradeJournal.RetentionDays} days; older entries are removed on load/write.");
+        ImGui.TextDisabled($"Journal: {journal.FileBytes / 1024d:N1} KB / {TradeJournal.MaxFileBytes / 1024} KB maximum. {journal.Status}");
+        if (!Plugin.Player.IsLoaded || Plugin.Player.ContentId == 0) { ImGui.TextWrapped("Log in to see purchases for this character."); return; }
+        var owner = Plugin.Player.ContentId;
+        var revision = journal.Revision;
+        if (journalRevision != revision || journalCharacter != owner)
+        {
+            journalRows = journal.Snapshot(owner); journalRevision = revision; journalCharacter = owner;
+            journalUnsoldUnits = journalRows.Sum(x => (long)x.Remaining); journalRealizedProfit = journalRows.Sum(x => x.RealizedProfit); journalCashRecovered = journalRows.Sum(x => (decimal)x.CashRecovered);
+            journalPage = Math.Min(journalPage, Math.Max(0, (journalRows.Length - 1) / 50));
+            if (!journalRows.Any(x => x.Id == journalSelection)) journalSelection = journalRows.FirstOrDefault()?.Id ?? Guid.Empty;
+        }
+        if (exportTask is { IsCompleted: true })
+        {
+            try { exportTask.GetAwaiter().GetResult(); journalMessage = "CSV saved. Each export replaces the same file."; }
+            catch (Exception ex) { journalMessage = "Export failed: " + ex.Message; }
+            exportTask = null;
+        }
+        ImGui.Separator();
+        if (ImGui.BeginTable("Retained trade totals", 3, ImGuiTableFlags.SizingStretchSame))
+        {
+            ImGui.TableNextColumn(); ImGui.TextDisabled("RETAINED PURCHASES"); ImGui.TextUnformatted($"{journalRows.Length:N0} lots / {journalUnsoldUnits:N0} units unsold");
+            ImGui.TableNextColumn(); ImGui.TextDisabled("REALIZED PROFIT ON RECORDED SALES"); ProfitText((double)journalRealizedProfit);
+            ImGui.TableNextColumn(); ImGui.TextDisabled("NET CASH AFTER PURCHASES"); ProfitText((double)journalCashRecovered);
+            ImGui.EndTable();
+        }
+        ImGui.TextDisabled("Totals cover retained records for this character only. Unsold stock is not counted as profit.");
+        ImGui.BeginDisabled(exportTask != null || journalRows.Length == 0);
+        if (ImGui.Button("Export CSV")) exportTask = journal.ExportAsync(owner);
+        ImGui.EndDisabled(); Hint(journal.ExportPath);
+        ImGui.SameLine(); if (ImGui.Button("Retry save")) journal.RetrySave();
+        if (!string.IsNullOrEmpty(journalMessage)) ImGui.TextWrapped(journalMessage);
+        if (journalRows.Length == 0)
+        {
+            ImGui.Spacing(); ImGui.TextWrapped("No retained purchases yet. Make a market-board purchase while tracking is enabled; it will appear here after confirmation. NPC purchases and past trades are not imported.");
+            return;
+        }
+        var pages = Math.Max(1, (journalRows.Length + 49) / 50);
+        ImGui.BeginDisabled(journalPage == 0); if (ImGui.SmallButton("Previous")) journalPage--; ImGui.EndDisabled();
+        ImGui.SameLine(); ImGui.TextUnformatted($"Page {journalPage + 1} / {pages} (50 purchases per page)");
+        ImGui.SameLine(); ImGui.BeginDisabled(journalPage >= pages - 1); if (ImGui.SmallButton("Next")) journalPage++; ImGui.EndDisabled();
+        var height = Math.Clamp(ImGui.GetContentRegionAvail().Y * .55f, 110, 320);
+        if (ImGui.BeginTable("Purchases", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp, new Vector2(0, height)))
+        {
+            ImGui.TableSetupColumn("When", ImGuiTableColumnFlags.WidthStretch, 1.1f);
+            ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch, 2.8f);
+            ImGui.TableSetupColumn("Buy world", ImGuiTableColumnFlags.WidthStretch, 1.2f);
+            ImGui.TableSetupColumn("Bought / sold", ImGuiTableColumnFlags.WidthStretch, 1f);
+            ImGui.TableSetupColumn("Paid + tax", ImGuiTableColumnFlags.WidthStretch, 1.1f);
+            ImGui.TableSetupColumn("Net sales", ImGuiTableColumnFlags.WidthStretch, 1.1f);
+            ImGui.TableSetupColumn("Realized gain", ImGuiTableColumnFlags.WidthStretch, 1.1f);
+            ImGui.TableSetupScrollFreeze(0, 1); ImGui.TableHeadersRow();
+            foreach (var lot in journalRows.Skip(journalPage * 50).Take(50))
+            {
+                ImGui.TableNextRow(); ImGui.TableNextColumn();
+                var stamp = DateTimeOffset.FromUnixTimeSeconds(lot.PurchasedAt).ToLocalTime();
+                if (ImGui.Selectable($"{stamp:MM/dd HH:mm}##lot{lot.Id}", journalSelection == lot.Id, ImGuiSelectableFlags.SpanAllColumns))
+                { journalSelection = lot.Id; saleQuantity = Math.Max(1, lot.Remaining); saleNetReceived = 0; journalMessage = ""; }
+                ImGui.TableNextColumn(); ImGui.TextUnformatted(JournalItem(lot)); Hint(JournalItem(lot));
+                ImGui.TableNextColumn(); ImGui.TextUnformatted(Plugin.Data.GetExcelSheet<World>().TryGetRow(lot.WorldId, out var world) ? world.Name.ToString() : $"World {lot.WorldId}");
+                ImGui.TableNextColumn(); ImGui.TextUnformatted($"{lot.Quantity} / {lot.SoldQuantity}");
+                ImGui.TableNextColumn(); ImGui.TextUnformatted($"{lot.TotalCost:N0}");
+                ImGui.TableNextColumn(); ImGui.TextUnformatted($"{lot.NetRevenue:N0}");
+                ImGui.TableNextColumn(); ProfitText((double)lot.RealizedProfit);
+            }
+            ImGui.EndTable();
+        }
+        var selected = journalRows.FirstOrDefault(x => x.Id == journalSelection);
+        if (selected == null) return;
+        ImGui.Spacing(); ImGui.TextUnformatted(JournalItem(selected));
+        ImGui.TextWrapped($"Bought {selected.Quantity} at {selected.UnitPrice:N0} gil each + {selected.PurchaseTax:N0} gil purchase tax. {selected.Remaining} units remain unsold in this record.");
+        if (selected.Remaining == 0) { ImGui.TextDisabled("All units in this purchase have a recorded sale."); return; }
+        ImGui.TextDisabled("Record an actual sale manually. Enter gil received AFTER seller tax, not a forecast price.");
+        var reviewSale = false;
+        if (ImGui.BeginTable("Record sale", 3, ImGuiTableFlags.SizingStretchSame))
+        {
+            ImGui.TableNextColumn(); FieldLabel("Units sold"); ImGui.InputInt("##SaleQty", ref saleQuantity);
+            ImGui.TableNextColumn(); FieldLabel("Total gil received after tax"); ImGui.InputInt("##SaleNet", ref saleNetReceived, 1000, 10000);
+            ImGui.TableNextColumn(); FieldLabel(" ");
+            ImGui.BeginDisabled(saleQuantity < 1 || saleQuantity > selected.Remaining || saleNetReceived < 0);
+            if (ImGui.Button("Review sale", new Vector2(ImGui.GetContentRegionAvail().X, 0))) reviewSale = true;
+            ImGui.EndDisabled(); ImGui.EndTable();
+        }
+        if (reviewSale) { saleToConfirm = selected; reviewedSaleQuantity = saleQuantity; reviewedSaleNet = saleNetReceived; ImGui.OpenPopup("Confirm recorded sale"); }
+        if (saleToConfirm != null && ImGui.BeginPopupModal("Confirm recorded sale", ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            ImGui.TextUnformatted(JournalItem(saleToConfirm));
+            ImGui.TextUnformatted($"Record {reviewedSaleQuantity} sold for {reviewedSaleNet:N0} gil net?");
+            ImGui.TextDisabled("This updates the retained purchase record; it does not sell an item in game.");
+            if (ImGui.Button("Record sale"))
+            {
+                journalMessage = journal.RecordSale(saleToConfirm.Id, owner, reviewedSaleQuantity, reviewedSaleNet) ? "Actual sale recorded locally." : "Sale could not be recorded. Check quantity and journal status.";
+                ImGui.CloseCurrentPopup();
+            }
+            ImGui.SameLine(); if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
+            ImGui.EndPopup();
+        }
+    }
+    private string JournalItem(PurchaseLot lot)
+    {
+        if (!journalItemNames.TryGetValue(lot.ItemId, out var name))
+        {
+            name = Plugin.Data.GetExcelSheet<Item>().TryGetRow(lot.ItemId, out var row) ? row.Name.ToString() : $"Item {lot.ItemId}";
+            if (journalItemNames.Count >= TradeJournal.MaxEntries) journalItemNames.Clear();
+            journalItemNames[lot.ItemId] = name;
+        }
+        return name + (lot.Hq ? " (HQ)" : " (NQ)");
+    }
     private static string Format(JsonElement row, string field, string format) => row.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetDouble().ToString(format) : "N/A";
     private static double Number(JsonElement row, string field) => row.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetDouble() : 0;
     private static string Text(JsonElement row, string field) => row.TryGetProperty(field, out var value) ? value.ToString() : "";
     public void Dispose() { InvalidateScan(); Invalidate(); market.Dispose(); }
 }
+
+
+
+
+
 
 
 

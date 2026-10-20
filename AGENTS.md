@@ -8,3 +8,5 @@
 - Keep UI/game-sheet reads on the game thread; network/model work runs in background tasks. Cancel and invalidate on changed inputs and disposal.
 - Preserve quality/world/freshness/coverage distinctions. Missing evidence is not a forecast. Charge whole purchased stacks and full upfront capital.
 - Definition of done: build, market/parity/scanner regressions, and in-game flows tested or explicitly unverified. Keep README accurate and dependency license notices packaged.
+
+- Purchase journal: 1,000 lots / 90 days / 512 KB; no snapshots, polling or growing backups. Log only matched confirmed purchases; sales stay actual manual entries. Keep character IDs and journal/export data local.

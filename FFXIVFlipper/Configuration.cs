@@ -4,6 +4,7 @@ namespace FFXIVFlipper;
 public sealed class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 1;
+    public bool TrackPurchases { get; set; } = true;
     public string BuyWorld { get; set; } = "";
     public string SellWorld { get; set; } = "";
     public bool Hq { get; set; }
@@ -16,5 +17,6 @@ public sealed class Configuration : IPluginConfiguration
     public int MinProfit { get; set; } = 1000;
     public int MinExpectedProfit { get; set; } = 10000;
 }
+
 
 

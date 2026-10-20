@@ -89,6 +89,7 @@ using (var planner = new PlannerEngine(default))
     Console.WriteLine($"{parityCount} browser-model parity fixtures passed.");
 }
 Console.WriteLine($"{await ScannerRegression.Run()} scanner integration checks passed.");
+Console.WriteLine($"{await JournalRegression.Run()} journal checks passed.");
 if (args.Contains("--scan-live"))
 {
     using var client = new MarketClient();
@@ -137,6 +138,7 @@ sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) 
 {
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(respond(request));
 }
+
 
 
 
