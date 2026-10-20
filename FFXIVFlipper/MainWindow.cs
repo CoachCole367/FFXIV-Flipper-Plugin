@@ -43,6 +43,8 @@ public sealed class MainWindow : Window, IDisposable
     private int minProfit;
     private int minExpectedProfit;
     private int selectedOpportunity = -1;
+    private string clipboardNotice = "";
+    private long clipboardNoticeUntil;
     private bool scanSelectedOnly;
     private int scanRunId;
     private Dictionary<uint, string>? itemCatalog;
@@ -122,6 +124,8 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.EndChild();
         }
         ImGui.TextUnformatted($"Item: {itemName} ({item})");
+        ImGui.BeginDisabled(item == 0); ImGui.SameLine(); if (ImGui.SmallButton("Copy item name")) CopyMarketName(item); ImGui.EndDisabled();
+        ClipboardHint();
         if (DrawWorld("Buy world", ref buyWorld)) Invalidate();
         if (DrawWorld("Sell world", ref sellWorld)) { Invalidate(); InvalidateScan(); }
         if (ImGui.Checkbox("HQ", ref hq)) Invalidate();
@@ -360,6 +364,7 @@ public sealed class MainWindow : Window, IDisposable
         else if (!basketAvailable) ImGui.TextWrapped("Basket unavailable. Keep the combined cost of any purchases within your budget.");
         var age = Math.Max(0, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - result.FinishedAt) / 60;
         ImGui.TextDisabled($"Expected gain sorted high to low. Basket marks picks that fit together. Updated {age}m ago.");
+        ClipboardHint();
         if (age >= 30) ImGui.TextWrapped("Results are over 30 minutes old. Scan again before buying.");
         if (result.Rows.Length == 0)
         {
@@ -369,11 +374,12 @@ public sealed class MainWindow : Window, IDisposable
         else
         {
             var tableHeight = Math.Clamp(ImGui.GetContentRegionAvail().Y * .48f, 120, 340);
-            if (ImGui.BeginTable("Opportunities", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp, new Vector2(0, tableHeight)))
+            if (ImGui.BeginTable("Opportunities", 8, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp, new Vector2(0, tableHeight)))
             {
                 ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch, 3.3f);
                 ImGui.TableSetupColumn("Buy world", ImGuiTableColumnFlags.WidthStretch, 1.2f);
                 ImGui.TableSetupColumn("Upfront", ImGuiTableColumnFlags.WidthStretch, 1f);
+                ImGui.TableSetupColumn("Sell / unit", ImGuiTableColumnFlags.WidthStretch, 1f);
                 ImGui.TableSetupColumn("Expected gain", ImGuiTableColumnFlags.WidthStretch, 1.2f);
                 ImGui.TableSetupColumn("Sell chance", ImGuiTableColumnFlags.WidthStretch, .9f);
                 ImGui.TableSetupColumn("Days", ImGuiTableColumnFlags.WidthStretch, .6f);
@@ -383,10 +389,12 @@ public sealed class MainWindow : Window, IDisposable
                 {
                     var row = result.Rows[index];
                     ImGui.TableNextRow(); ImGui.TableNextColumn();
-                    if (ImGui.Selectable($"{Text(row,"itemName")}##trade{index}", selectedOpportunity == index, ImGuiSelectableFlags.SpanAllColumns)) selectedOpportunity = index;
-                    Hint(Text(row,"itemName"));
+                    if (ImGui.Selectable($"{Text(row,"itemName")}##trade{index}", selectedOpportunity == index)) { selectedOpportunity = index; CopyMarketName((uint)Number(row,"id")); }
+                    Hint(Text(row,"itemName") + " - click to copy the market-board search name.");
                     ImGui.TableNextColumn(); ImGui.TextUnformatted(Text(row,"buyWorld"));
                     ImGui.TableNextColumn(); ImGui.TextUnformatted($"{Number(row,"planCost"):N0}");
+                    ImGui.TableNextColumn(); ImGui.TextUnformatted($"{Number(row,"targetSell"):N0}");
+                    Hint($"Suggested sell price per unit on {sellWorld}, before seller tax. This is an estimate, not a guaranteed sale.");
                     ImGui.TableNextColumn(); ProfitText(Number(row,"planExpectedProfit"));
                     ImGui.TableNextColumn(); ImGui.TextUnformatted($"{Number(row,"sellProbAtRecommended"):P0}");
                     ImGui.TableNextColumn(); ImGui.TextUnformatted(Format(row,"daysToClearRecommended","N1"));
@@ -407,7 +415,8 @@ public sealed class MainWindow : Window, IDisposable
     }
     private void DrawTradeDetails(JsonElement row)
     {
-        ImGui.TextUnformatted(Text(row,"itemName"));
+        if (ImGui.SmallButton(Text(row,"itemName") + "##copyTradeName")) CopyMarketName((uint)Number(row,"id"));
+        Hint("Copy item name for market-board search (without the HQ/NQ suffix).");
         ImGui.TextUnformatted($"Buy on {Text(row,"buyWorld")}  ->  Sell on {sellWorld} at {Number(row,"targetSell"):N0} gil / unit");
         ImGui.Separator();
         ImGui.TextWrapped($"Purchase {Number(row,"purchasedQty"):N0} units for {Number(row,"planCost"):N0} gil. Plan to sell {Number(row,"recommendedQty"):N0}; expected sales {Number(row,"expectedUnitsSoldAtRecommended"):N1} units.");
@@ -438,6 +447,7 @@ public sealed class MainWindow : Window, IDisposable
     private void DrawJournal()
     {
         ImGui.TextUnformatted("PURCHASE JOURNAL");
+        ClipboardHint();
         var tracking = config.TrackPurchases;
         if (ImGui.Checkbox("Automatically log market-board purchases", ref tracking))
         {
@@ -500,9 +510,12 @@ public sealed class MainWindow : Window, IDisposable
             {
                 ImGui.TableNextRow(); ImGui.TableNextColumn();
                 var stamp = DateTimeOffset.FromUnixTimeSeconds(lot.PurchasedAt).ToLocalTime();
-                if (ImGui.Selectable($"{stamp:MM/dd HH:mm}##lot{lot.Id}", journalSelection == lot.Id, ImGuiSelectableFlags.SpanAllColumns))
+                if (ImGui.Selectable($"{stamp:MM/dd HH:mm}##lot{lot.Id}", journalSelection == lot.Id))
                 { journalSelection = lot.Id; saleQuantity = Math.Max(1, lot.Remaining); saleNetReceived = 0; journalMessage = ""; }
-                ImGui.TableNextColumn(); ImGui.TextUnformatted(JournalItem(lot)); Hint(JournalItem(lot));
+                ImGui.TableNextColumn();
+                if (ImGui.Selectable(JournalItem(lot) + $"##copyLot{lot.Id}", journalSelection == lot.Id))
+                { journalSelection = lot.Id; saleQuantity = Math.Max(1, lot.Remaining); saleNetReceived = 0; CopyMarketName(lot.ItemId); }
+                Hint("Click the item name to copy it for market-board search.");
                 ImGui.TableNextColumn(); ImGui.TextUnformatted(Plugin.Data.GetExcelSheet<World>().TryGetRow(lot.WorldId, out var world) ? world.Name.ToString() : $"World {lot.WorldId}");
                 ImGui.TableNextColumn(); ImGui.TextUnformatted($"{lot.Quantity} / {lot.SoldQuantity}");
                 ImGui.TableNextColumn(); ImGui.TextUnformatted($"{lot.TotalCost:N0}");
@@ -552,11 +565,28 @@ public sealed class MainWindow : Window, IDisposable
         }
         return name + (lot.Hq ? " (HQ)" : " (NQ)");
     }
+    private void CopyMarketName(uint itemId)
+    {
+        // Resolve the raw localized item name: planner labels append HQ/NQ, which must not enter search text.
+        if (itemId == 0 || !Plugin.Data.GetExcelSheet<Item>().TryGetRow(itemId, out var row) || string.IsNullOrWhiteSpace(row.Name.ToString()))
+        {
+            clipboardNotice = "Item name unavailable; clipboard unchanged.";
+        }
+        else
+        {
+            try { var name = row.Name.ToString(); ImGui.SetClipboardText(name); clipboardNotice = $"Copied: {name}"; }
+            catch (Exception ex) { clipboardNotice = "Could not copy item name. Try again."; Plugin.Log.Warning(ex, "Item clipboard copy failed"); }
+        }
+        clipboardNoticeUntil = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 4000;
+    }
+    private void ClipboardHint() => ImGui.TextDisabled(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() < clipboardNoticeUntil
+        ? clipboardNotice : "Click an item name to copy it; paste into market-board search with Ctrl+V.");
     private static string Format(JsonElement row, string field, string format) => row.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetDouble().ToString(format) : "N/A";
     private static double Number(JsonElement row, string field) => row.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetDouble() : 0;
     private static string Text(JsonElement row, string field) => row.TryGetProperty(field, out var value) ? value.ToString() : "";
     public void Dispose() { InvalidateScan(); Invalidate(); market.Dispose(); }
 }
+
 
 
 
