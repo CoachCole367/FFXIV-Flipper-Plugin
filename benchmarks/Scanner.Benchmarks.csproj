@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+<ItemGroup><PackageReference Include="Jint" Version="4.17.0"/><EmbeddedResource Include="../FFXIVFlipper/Model/*.js" Link="Model/%(Filename)%(Extension)"/><Content Include="../tests/Fixtures/browser-parity.json" Link="fixtures.json" CopyToOutputDirectory="PreserveNewest"/></ItemGroup>
+</Project>

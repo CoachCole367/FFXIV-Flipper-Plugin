@@ -1,0 +1,53 @@
+{
+  "count": 50,
+  "repeats": 3,
+  "latencyMs": 0,
+  "coldPreparedMs": 38.3073,
+  "fixtureCount": 15,
+  "results": [
+    {
+      "mask": 0,
+      "batch": false,
+      "prepared": false,
+      "pipeline": false,
+      "skipPerItemBasket": false,
+      "items": 50,
+      "requests": 151,
+      "medianMs": 1842.9701,
+      "allocatedMb": 848.702848
+    },
+    {
+      "mask": 2,
+      "batch": false,
+      "prepared": true,
+      "pipeline": false,
+      "skipPerItemBasket": false,
+      "items": 50,
+      "requests": 151,
+      "medianMs": 1414.4293,
+      "allocatedMb": 690.79336
+    },
+    {
+      "mask": 8,
+      "batch": false,
+      "prepared": false,
+      "pipeline": false,
+      "skipPerItemBasket": true,
+      "items": 50,
+      "requests": 151,
+      "medianMs": 1824.6991,
+      "allocatedMb": 842.689368
+    },
+    {
+      "mask": 10,
+      "batch": false,
+      "prepared": true,
+      "pipeline": false,
+      "skipPerItemBasket": true,
+      "items": 50,
+      "requests": 151,
+      "medianMs": 1412.896,
+      "allocatedMb": 686.746
+    }
+  ]
+}

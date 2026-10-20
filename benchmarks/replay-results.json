@@ -1,0 +1,185 @@
+{
+  "count": 50,
+  "repeats": 3,
+  "latencyMs": 10,
+  "coldPreparedMs": 52.4155,
+  "fixtureCount": 15,
+  "results": [
+    {
+      "mask": 0,
+      "batch": false,
+      "prepared": false,
+      "pipeline": false,
+      "skipPerItemBasket": false,
+      "items": 50,
+      "requests": 151,
+      "medianMs": 3379.9739,
+      "allocatedMb": 849.140376
+    },
+    {
+      "mask": 1,
+      "batch": true,
+      "prepared": false,
+      "pipeline": false,
+      "skipPerItemBasket": false,
+      "items": 50,
+      "requests": 16,
+      "medianMs": 1897.234,
+      "allocatedMb": 848.992472
+    },
+    {
+      "mask": 2,
+      "batch": false,
+      "prepared": true,
+      "pipeline": false,
+      "skipPerItemBasket": false,
+      "items": 50,
+      "requests": 151,
+      "medianMs": 2892.8343,
+      "allocatedMb": 691.212048
+    },
+    {
+      "mask": 3,
+      "batch": true,
+      "prepared": true,
+      "pipeline": false,
+      "skipPerItemBasket": false,
+      "items": 50,
+      "requests": 16,
+      "medianMs": 1496.5304,
+      "allocatedMb": 691.076912
+    },
+    {
+      "mask": 4,
+      "batch": false,
+      "prepared": false,
+      "pipeline": true,
+      "skipPerItemBasket": false,
+      "items": 50,
+      "requests": 151,
+      "medianMs": 2241.5123,
+      "allocatedMb": 849.217328
+    },
+    {
+      "mask": 5,
+      "batch": true,
+      "prepared": false,
+      "pipeline": true,
+      "skipPerItemBasket": false,
+      "items": 50,
+      "requests": 16,
+      "medianMs": 1808.2388,
+      "allocatedMb": 848.900976
+    },
+    {
+      "mask": 6,
+      "batch": false,
+      "prepared": true,
+      "pipeline": true,
+      "skipPerItemBasket": false,
+      "items": 50,
+      "requests": 151,
+      "medianMs": 2079.9749,
+      "allocatedMb": 691.206592
+    },
+    {
+      "mask": 7,
+      "batch": true,
+      "prepared": true,
+      "pipeline": true,
+      "skipPerItemBasket": false,
+      "items": 50,
+      "requests": 16,
+      "medianMs": 1398.4233,
+      "allocatedMb": 691.05264
+    },
+    {
+      "mask": 8,
+      "batch": false,
+      "prepared": false,
+      "pipeline": false,
+      "skipPerItemBasket": true,
+      "items": 50,
+      "requests": 151,
+      "medianMs": 3392.0616,
+      "allocatedMb": 843.023144
+    },
+    {
+      "mask": 9,
+      "batch": true,
+      "prepared": false,
+      "pipeline": false,
+      "skipPerItemBasket": true,
+      "items": 50,
+      "requests": 16,
+      "medianMs": 1849.3806,
+      "allocatedMb": 842.924664
+    },
+    {
+      "mask": 10,
+      "batch": false,
+      "prepared": true,
+      "pipeline": false,
+      "skipPerItemBasket": true,
+      "items": 50,
+      "requests": 151,
+      "medianMs": 2887.8796,
+      "allocatedMb": 687.005144
+    },
+    {
+      "mask": 11,
+      "batch": true,
+      "prepared": true,
+      "pipeline": false,
+      "skipPerItemBasket": true,
+      "items": 50,
+      "requests": 16,
+      "medianMs": 1495.5227,
+      "allocatedMb": 686.917432
+    },
+    {
+      "mask": 12,
+      "batch": false,
+      "prepared": false,
+      "pipeline": true,
+      "skipPerItemBasket": true,
+      "items": 50,
+      "requests": 151,
+      "medianMs": 2237.3505,
+      "allocatedMb": 842.951392
+    },
+    {
+      "mask": 13,
+      "batch": true,
+      "prepared": false,
+      "pipeline": true,
+      "skipPerItemBasket": true,
+      "items": 50,
+      "requests": 16,
+      "medianMs": 1701.8969,
+      "allocatedMb": 842.818824
+    },
+    {
+      "mask": 14,
+      "batch": false,
+      "prepared": true,
+      "pipeline": true,
+      "skipPerItemBasket": true,
+      "items": 50,
+      "requests": 151,
+      "medianMs": 2066.9761,
+      "allocatedMb": 687.005472
+    },
+    {
+      "mask": 15,
+      "batch": true,
+      "prepared": true,
+      "pipeline": true,
+      "skipPerItemBasket": true,
+      "items": 50,
+      "requests": 16,
+      "medianMs": 1434.737,
+      "allocatedMb": 686.910616
+    }
+  ]
+}

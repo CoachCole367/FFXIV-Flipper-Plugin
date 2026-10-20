@@ -1,0 +1,50 @@
+[
+  {
+    "round": 0,
+    "batch": false,
+    "items": 10,
+    "requests": 30,
+    "ms": 4232.0827,
+    "bytes": 412353
+  },
+  {
+    "round": 0,
+    "batch": true,
+    "items": 10,
+    "requests": 3,
+    "ms": 675.1198,
+    "bytes": 412673
+  },
+  {
+    "round": 1,
+    "batch": true,
+    "items": 10,
+    "requests": 3,
+    "ms": 479.8896,
+    "bytes": 412689
+  },
+  {
+    "round": 1,
+    "batch": false,
+    "items": 10,
+    "requests": 30,
+    "ms": 3086.7134,
+    "bytes": 412361
+  },
+  {
+    "round": 2,
+    "batch": false,
+    "items": 10,
+    "requests": 30,
+    "ms": 3899.15,
+    "bytes": 412360
+  },
+  {
+    "round": 2,
+    "batch": true,
+    "items": 10,
+    "requests": 3,
+    "ms": 804.5594,
+    "bytes": 413029
+  }
+]

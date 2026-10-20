@@ -97,3 +97,5 @@ Jint and Acornima license notices are in `licenses/`. Sources: https://dalamud.d
 
 
 
+
+Scanner performance experiments and measured results: [benchmark report](benchmarks/README.md). These prototypes do not change the running plugin.
