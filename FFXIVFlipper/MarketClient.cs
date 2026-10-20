@@ -1,30 +1,70 @@
+using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Http;
-using System.Text.Json;
 namespace FFXIVFlipper;
-public sealed record Listing(int PricePerUnit, int Quantity, bool Hq);
-public sealed record MarketSnapshot(long LastUploadTime, Listing[] Listings);
 public sealed class MarketClient : IDisposable
 {
-    private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(25) };
-    public MarketClient() => http.DefaultRequestHeaders.UserAgent.ParseAdd("FFXIVFlipper/0.1.0");
-    public async Task<MarketSnapshot> Fetch(string world, uint item, CancellationToken token)
+    private readonly HttpClient http;
+    private readonly SemaphoreSlim slots = new(2);
+    private readonly ConcurrentDictionary<string, (DateTimeOffset Time, string Json)> cache = new();
+    private long cooldownUntil;
+    public MarketClient(HttpMessageHandler? handler = null)
     {
-        using var response = await http.GetAsync($"https://universalis.app/api/v2/{Uri.EscapeDataString(world)}/{item}?listings=100&entries=0", token);
-        response.EnsureSuccessStatusCode();
-        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
-        var root = json.RootElement;
-        if (!root.TryGetProperty("listings", out var rows) || rows.ValueKind != JsonValueKind.Array)
-            throw new InvalidDataException("Market response has no listing data.");
-        var listings = new List<Listing>();
-        foreach (var row in rows.EnumerateArray())
+        http = handler == null ? new() : new(handler);
+        http.Timeout = TimeSpan.FromSeconds(25);
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("FFXIVFlipper/0.2.0");
+    }
+    public async Task<MarketSnapshot> Fetch(uint world, uint item, bool withHistory, CancellationToken token)
+    {
+        var snapshot = MarketParser.Listings(await Get($"{world}/{item}?listings=100&entries=0", token), world, item);
+        if (!withHistory) return snapshot;
+        var until = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        // History is deliberately uncached so the explicit end time always matches its coverage window.
+        try
         {
-            if (!row.TryGetProperty("hq", out var hq) || hq.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) continue;
-            if (!row.TryGetProperty("pricePerUnit", out var p) || !p.TryGetInt32(out var price) || price <= 0) continue;
-            if (!row.TryGetProperty("quantity", out var q) || !q.TryGetInt32(out var quantity) || quantity <= 0) continue;
-            listings.Add(new(price, quantity, hq.GetBoolean()));
+            var json = await Get($"history/{world}/{item}?entriesToReturn={MarketParser.HistoryLimit}&entriesWithin={MarketParser.WindowSeconds}&entriesUntil={until}", token, false);
+            return snapshot with { History = MarketParser.History(json, world, item, until) };
         }
-        var uploaded = root.TryGetProperty("lastUploadTime", out var time) && time.TryGetInt64(out var value) ? value : 0;
-        return new(uploaded, listings.OrderBy(x => x.PricePerUnit).ToArray());
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            return snapshot with { History = new([], false, "Sales history timed out. Reload to retry.", until) };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidDataException or System.Text.Json.JsonException)
+        {
+            return snapshot with { History = new([], false, $"Sales history unavailable: {ex.Message}", until) };
+        }
+    }
+    private async Task<string> Get(string path, CancellationToken token, bool useCache = true)
+    {
+        token.ThrowIfCancellationRequested();
+        if (useCache && cache.TryGetValue(path, out var saved) && DateTimeOffset.UtcNow - saved.Time < TimeSpan.FromSeconds(30)) return saved.Json;
+        await slots.WaitAsync(token);
+        try
+        {
+            var remaining = Interlocked.Read(ref cooldownUntil) - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            if (remaining > 0) throw new HttpRequestException($"Universalis rate limit: retry in {remaining} seconds.");
+            using var response = await http.GetAsync($"https://universalis.app/api/v2/{path}", token);
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                var wait = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow) ?? TimeSpan.FromSeconds(30);
+                var seconds = Math.Max(1, (long)Math.Ceiling(wait.TotalSeconds));
+                Interlocked.Exchange(ref cooldownUntil, DateTimeOffset.UtcNow.ToUnixTimeSeconds() + seconds);
+                throw new HttpRequestException($"Universalis rate limit: retry in {seconds} seconds.");
+            }
+            if (response.StatusCode == HttpStatusCode.NotFound) throw new HttpRequestException("World or item has no available market data.");
+            response.EnsureSuccessStatusCode();
+            var json = await response.Content.ReadAsStringAsync(token);
+            // Validate JSON before retaining a successful response; identity and schema are checked by the parser.
+            using var parsed = System.Text.Json.JsonDocument.Parse(json);
+            if (useCache)
+            {
+                if (cache.Count >= 64) cache.Clear();
+                cache[path] = (DateTimeOffset.UtcNow, json);
+            }
+            return json;
+        }
+        finally { slots.Release(); }
     }
     public void Dispose() => http.Dispose();
 }
+
