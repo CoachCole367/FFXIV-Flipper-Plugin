@@ -35,7 +35,7 @@ The generator reads the webpage source and writes plugin fixtures; it does not e
 
 ## Validation
 
-Version 0.6.0 passes 165 checks: 31 market, 3 source-hash, 25 browser parity, 19 scanner, 14 batching/pipeline, 34 discovery/sorting and 39 journal checks. Coverage includes cancellation, identity/quality, incomplete history, budgets, sorting, bounded persistence and journal reload/corruption/write failures. The tagged commit's GitHub build passed.
+The 0.6.0 release passed 165 checks. The maintenance build adds 17 HTTP size/cancellation checks and six journal character/export checks (188 total): 31 market, 3 source-hash, 25 browser parity, 19 scanner, 14 batching/pipeline, 34 discovery/sorting, 17 HTTP and 45 journal checks. UI character-switch behavior still requires the in-game checks below; automated journal tests do not exercise ImGui or game events.
 
 Two live runs each screened 1,000 IDs and evaluated 200 candidates. Balanced found 35 trades in 31.44s with 10 warnings; a different active-market slice found 8 in 27.67s with 21 warnings. Upstream/network failures explicitly excluded affected items. Different candidate sets and snapshot results are not a source-quality comparison or a profit guarantee.
 
@@ -69,3 +69,23 @@ Jint/Acornima notices are in [licenses](../licenses). See [Universalis documenta
 Use a GitHub-provided noreply address for Git author and committer emails before committing. Existing public commit metadata requires a coordinated history rewrite to remove. GitHub ownership and required installation/update URLs remain public.
 
 Local environment files and private key files are ignored. Never place credentials in tracked files. Release packages exclude journals, exports, configuration, debug symbols and raw market data; compiler source references use a neutral path. Keep third-party copyright notices intact.
+
+## Maintenance response limits
+
+HTTP bodies are streamed with a 16 MiB per-response limit, including unknown or understated Content-Length. The 25-second request timeout covers body reads. Oversized data is rejected before parsing/cache insertion and remains unavailable evidence.
+
+## Before the next release: in-game character checks
+
+Status: **pending user verification**. Use the maintenance DLL as a dev plugin with its dependencies/licenses beside it. Disable the installed repository copy first, back up the existing journal, and keep the same configuration folder. Automated tests do not verify game events or ImGui behavior.
+
+1. On character A, open `/fflipper` → Purchase journal. Confirm tracking is enabled (new configurations default to enabled). Use an actual retained purchase with unsold units. Enter a partial sale and click Review sale without confirming. Do not record fictitious sales in your real journal.
+2. Log out with that review open; log into character B. Check that A's modal, selection, quantity, receipts and status message are gone, including when B has no journal rows. Return to A and check that no sale was recorded. Repeat with the plugin window closed while switching characters, then reopen it.
+3. On A, review and confirm an actual sale. Confirm that only A's purchase and totals change. On B, verify A's purchase is absent and B can record its own actual sale. Return to A and check persistence after disable/re-enable.
+4. On A, click Export CSV and immediately switch to B. The in-flight export must contain only A's requested records; it is not canceled by a character change. It must not report completion as B's export. Then export on B: the same CSV must be replaced with only B's records, or the button must be disabled if B has no records. Check item IDs and known quantities against each journal; no character-ID/name column should be present. The Export CSV tooltip shows its local path.
+5. Record plugin build/commit, date and pass/fail for each step. Report any stale modal, mixed rows, incorrect totals or export error before the next release. Copies of CSVs contain trade data: keep them local.
+
+## Publishing permissions review (2026-10-20)
+
+Authenticated GitHub API reads verified: one collaborator (the owner, admin); Actions defaults to read permissions and cannot approve PRs; the build workflow explicitly requests only contents: read and stages artifacts without publishing. No environments, branch protection on main, or repository/inherited tag/branch rulesets were present. Actions permits all actions and does not require SHA pinning. Release v0.6.0 reports immutable: false. These are observed settings, not proof that account credentials or installed GitHub Apps are secure; account MFA, app permissions and credential rotation were not audited.
+
+Before publishing, review who has write/admin access, enforce the build check on main, protect release tags from updates/deletion, and consider [immutable releases](https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/establish-provenance-and-integrity/prevent-release-changes). Immutability locks published assets and their tag: upload and verify all assets in a draft before publishing. If automated publishing is added later, isolate contents: write permission to a reviewed release job/environment; keep test/PR jobs read-only. Permission/protection settings were reviewed without changing them.

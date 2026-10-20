@@ -25,6 +25,7 @@ public sealed class Plugin : IDalamudPlugin
         config = PluginInterface.GetPluginConfig() as Configuration ?? new();
         journal = new(PluginInterface.GetPluginConfigDirectory()); tracker = new(journal);
         main = new(config, journal, tracker.Clear);
+        Framework.Update += OnFrameworkUpdate;
         MarketBoard.PurchaseRequested += OnPurchaseRequested;
         MarketBoard.ItemPurchased += OnItemPurchased;
         windows.AddWindow(main);
@@ -54,10 +55,12 @@ public sealed class Plugin : IDalamudPlugin
         });
     }
     private void OnCommand(string command, string args) => Open();
+    private void OnFrameworkUpdate(IFramework framework) => main.UpdateCharacter(Player.IsLoaded ? Player.ContentId : 0);
     private void Open() => main.IsOpen = true;
     public void Dispose()
     {
         disposed = true;
+        Framework.Update -= OnFrameworkUpdate;
         MarketBoard.PurchaseRequested -= OnPurchaseRequested;
         MarketBoard.ItemPurchased -= OnItemPurchased;
         tracker.Clear();

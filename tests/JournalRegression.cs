@@ -50,6 +50,18 @@ public static class JournalRegression
                 Check(export.Contains("1050")&&export.Contains("950.00")&&!export.Contains("characterId"),"CSV omitted actual accounting or exported character identity");
                 await journal.ExportAsync(1);
                 Check(Directory.GetFiles(directory).Length==2,"Exports/backups accumulated extra files");
+                var other = Lot(100, owner: 2) with { ItemId = 20000 };
+                Check(journal.Add(other), "Second-character purchase was not retained");
+                var firstCharacterExport = journal.ExportAsync(1);
+                Check(!journal.RecordSale(other.Id, 1, 1, 100), "Sale review from another character changed a purchase");
+                Check(journal.RecordSale(other.Id, 2, 1, 300), "Current-character sale was rejected");
+                await firstCharacterExport;
+                var firstCsv = File.ReadAllText(journal.ExportPath);
+                Check(firstCsv.Contains(",10373,") && !firstCsv.Contains(",20000,"), "In-flight export mixed character records");
+                await journal.ExportAsync(2);
+                var secondCsv = File.ReadAllText(journal.ExportPath);
+                Check(secondCsv.Contains(",20000,") && !secondCsv.Contains(",10373,"), "Second-character export retained first-character rows");
+                Check(!secondCsv.Contains("characterId", StringComparison.OrdinalIgnoreCase), "Export included character identifiers");
             }
             using(var loaded=new TradeJournal(directory,()=>clock)) Check(loaded.Snapshot(1).Length==2&&loaded.Snapshot(1).Any(x=>x.SoldQuantity==10),"Journal did not survive reload");
             using(var journal=new TradeJournal(Path.Combine(root,"bounded"),()=>clock))

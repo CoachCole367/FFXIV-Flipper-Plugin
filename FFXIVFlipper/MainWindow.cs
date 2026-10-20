@@ -52,6 +52,7 @@ public sealed class MainWindow : Window, IDisposable
     private int reviewedSaleNet;
     private string journalMessage = "";
     private Task? exportTask;
+    private ulong exportCharacter;
     private readonly Dictionary<uint, string> journalItemNames = [];
     public MainWindow(Configuration config, TradeJournal journal, System.Action clearPendingPurchases) : base("FFXIV Flipper")
     {
@@ -70,6 +71,7 @@ public sealed class MainWindow : Window, IDisposable
     public override void PreDraw() => ImGui.SetNextWindowBgAlpha(0.98f);
     public override void Draw()
     {
+        UpdateCharacter(Plugin.Player.IsLoaded ? Plugin.Player.ContentId : 0);
         if (string.IsNullOrEmpty(sellWorld) && Plugin.Player.IsLoaded && Plugin.Player.HomeWorld.IsValid)
             sellWorld = Plugin.Player.HomeWorld.Value.Name.ToString();
         if (ImGui.BeginTabBar("Flipper tools"))
@@ -423,8 +425,40 @@ public sealed class MainWindow : Window, IDisposable
     private static void FieldLabel(string text) { ImGui.TextUnformatted(text); ImGui.SetNextItemWidth(-1); }
     private static void Hint(string text) { if (ImGui.IsItemHovered()) { ImGui.BeginTooltip(); ImGui.TextUnformatted(text); ImGui.EndTooltip(); } }
     private static void ProfitText(double amount) => ImGui.TextColored(amount > 0 ? new Vector4(.48f,.85f,.58f,1) : new Vector4(.8f,.8f,.8f,1), $"{(amount > 0 ? "+" : "")}{amount:N0}");
+    internal void UpdateCharacter(ulong owner)
+    {
+        if (journalCharacter == owner) return;
+        journalCharacter = owner; journalRevision = -1; journalRows = [];
+        journalSelection = Guid.Empty; journalPage = 0; journalSortDirty = true;
+        journalUnsoldUnits = 0; journalRealizedProfit = 0; journalCashRecovered = 0;
+        saleToConfirm = null; saleQuantity = 1; saleNetReceived = 0;
+        reviewedSaleQuantity = 0; reviewedSaleNet = 0; journalMessage = "";
+        clearPendingPurchases();
+    }
+    private void DrawSaleConfirmation(ulong owner)
+    {
+        if (!ImGui.BeginPopupModal("Confirm recorded sale", ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (saleToConfirm == null || owner == 0 || saleToConfirm.CharacterId != owner)
+        {
+            saleToConfirm = null; ImGui.CloseCurrentPopup(); ImGui.EndPopup(); return;
+        }
+        ImGui.TextUnformatted(JournalItem(saleToConfirm));
+        ImGui.TextUnformatted($"Record {reviewedSaleQuantity} sold for {reviewedSaleNet:N0} gil net?");
+        ImGui.TextDisabled("This updates the retained purchase record; it does not sell an item in game.");
+        if (ImGui.Button("Record sale"))
+        {
+            journalMessage = journal.RecordSale(saleToConfirm.Id, owner, reviewedSaleQuantity, reviewedSaleNet) ? "Actual sale recorded locally." : "Sale could not be recorded. Check quantity and journal status.";
+            saleToConfirm = null; ImGui.CloseCurrentPopup();
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Cancel")) { saleToConfirm = null; ImGui.CloseCurrentPopup(); }
+        ImGui.EndPopup();
+    }
     private void DrawJournal()
     {
+        var owner = journalCharacter;
+        // Process an existing modal before logged-out/empty-journal early returns.
+        DrawSaleConfirmation(owner);
         ImGui.TextUnformatted("PURCHASE JOURNAL");
         ClipboardHint();
         var tracking = config.TrackPurchases;
@@ -435,8 +469,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.TextDisabled("Records future confirmed purchases. No inventory polling or market snapshots.");
         ImGui.TextDisabled($"Keeps the newest {TradeJournal.MaxEntries:N0} purchases for up to {TradeJournal.RetentionDays} days; older entries are removed on load/write.");
         ImGui.TextDisabled($"Journal: {journal.FileBytes / 1024d:N1} KB / {TradeJournal.MaxFileBytes / 1024} KB maximum. {journal.Status}");
-        if (!Plugin.Player.IsLoaded || Plugin.Player.ContentId == 0) { ImGui.TextWrapped("Log in to see purchases for this character."); return; }
-        var owner = Plugin.Player.ContentId;
+        if (owner == 0) { ImGui.TextWrapped("Log in to see purchases for this character."); return; }
         var revision = journal.Revision;
         if (journalRevision != revision || journalCharacter != owner)
         {
@@ -447,8 +480,8 @@ public sealed class MainWindow : Window, IDisposable
         }
         if (exportTask is { IsCompleted: true })
         {
-            try { exportTask.GetAwaiter().GetResult(); journalMessage = "CSV saved. Each export replaces the same file."; }
-            catch (Exception ex) { journalMessage = "Export failed: " + ex.Message; }
+            try { exportTask.GetAwaiter().GetResult(); if (exportCharacter == owner) journalMessage = "CSV saved. Each export replaces the same file."; }
+            catch (Exception ex) { if (exportCharacter == owner) journalMessage = "Export failed: " + ex.Message; }
             exportTask = null;
         }
         ImGui.Separator();
@@ -461,7 +494,7 @@ public sealed class MainWindow : Window, IDisposable
         }
         ImGui.TextDisabled("Totals cover retained records for this character only. Unsold stock is not counted as profit.");
         ImGui.BeginDisabled(exportTask != null || journalRows.Length == 0);
-        if (ImGui.Button("Export CSV")) exportTask = journal.ExportAsync(owner);
+        if (ImGui.Button("Export CSV")) { exportCharacter = owner; exportTask = journal.ExportAsync(owner); }
         ImGui.EndDisabled(); Hint(journal.ExportPath);
         ImGui.SameLine(); if (ImGui.Button("Retry save")) journal.RetrySave();
         if (!string.IsNullOrEmpty(journalMessage)) ImGui.TextWrapped(journalMessage);
@@ -527,19 +560,6 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.EndDisabled(); ImGui.EndTable();
         }
         if (reviewSale) { saleToConfirm = selected; reviewedSaleQuantity = saleQuantity; reviewedSaleNet = saleNetReceived; ImGui.OpenPopup("Confirm recorded sale"); }
-        if (saleToConfirm != null && ImGui.BeginPopupModal("Confirm recorded sale", ImGuiWindowFlags.AlwaysAutoResize))
-        {
-            ImGui.TextUnformatted(JournalItem(saleToConfirm));
-            ImGui.TextUnformatted($"Record {reviewedSaleQuantity} sold for {reviewedSaleNet:N0} gil net?");
-            ImGui.TextDisabled("This updates the retained purchase record; it does not sell an item in game.");
-            if (ImGui.Button("Record sale"))
-            {
-                journalMessage = journal.RecordSale(saleToConfirm.Id, owner, reviewedSaleQuantity, reviewedSaleNet) ? "Actual sale recorded locally." : "Sale could not be recorded. Check quantity and journal status.";
-                ImGui.CloseCurrentPopup();
-            }
-            ImGui.SameLine(); if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
-            ImGui.EndPopup();
-        }
     }
     private string JournalItem(PurchaseLot lot)
     {

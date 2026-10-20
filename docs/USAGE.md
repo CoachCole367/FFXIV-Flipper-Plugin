@@ -33,7 +33,7 @@ Skipped items are reported separately. A rate-limit stop preserves completed opp
 
 ## Purchase journal
 
-Only confirmed market-board purchases made while tracking is enabled can be recorded. NPC purchases, trades, past purchases and offline activity are not imported. Requests are matched to confirmations by item, quality, quantity, character, world and a 30-second window. Ambiguous or duplicate events are skipped.
+Purchase tracking is on by default for new configurations. The **Automatically log market-board purchases** checkbox preserves your saved choice. Only confirmed market-board purchases made while tracking is enabled can be recorded. NPC purchases, trades, past purchases and offline activity are not imported. Requests are matched to confirmations by item, quality, quantity, character, world and a 30-second window. Ambiguous or duplicate events are skipped.
 
 Sales are manual: select a purchase, enter units sold and total gil received after seller tax, review, and confirm. Partial sales accumulate on that purchase. Realized profit subtracts the acquisition cost of sold units; net cash recovery subtracts the entire purchase cost. Unsold stock is not counted as realized profit. Automatic retainer-sale detection and model learning are not implemented.
 
@@ -43,6 +43,7 @@ Sales are manual: select a purchase, enter units sold and total gil received aft
 - Stores IDs and numeric trade details locally. Current-character views and exports do not expose other characters' records; character IDs are never sent to Universalis or GitHub.
 - Saves are event-triggered and coalesced, with one fixed temporary file; no polling, numbered backups or growing logs. Pending saves flush on unload.
 - Export CSV replaces the same purchase-journal.csv file. Journal, export and their fixed temporary files total at most four managed files, each capped at 512 KB. Copies you make elsewhere are outside retention limits.
+- An export already running finishes for the character who requested it, even if you log out or switch characters. Export again on the new character to replace that CSV. Pending sale confirmations and entry fields clear on character changes; a reviewed sale must belong to the current character.
 - Totals cover retained records, not lifetime earnings or a permanent inventory ledger.
 
 Storage errors are displayed. A malformed, oversized or unsupported journal is preserved and recording becomes read-only; the plugin does not overwrite it.

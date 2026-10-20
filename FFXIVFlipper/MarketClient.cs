@@ -6,6 +6,7 @@ namespace FFXIVFlipper;
 public sealed record ScanMarketItem(Dictionary<string, MarketSnapshot>? Supply, MarketSnapshot? Home, string? Error);
 public sealed class MarketClient : IDisposable
 {
+    internal const int MaxResponseBytes = 16 * 1024 * 1024;
     private readonly HttpClient http;
     private readonly SemaphoreSlim slots = new(2);
     private readonly ConcurrentDictionary<string, (DateTimeOffset Time, string Json)> cache = new();
@@ -46,7 +47,12 @@ public sealed class MarketClient : IDisposable
         {
             var remaining = Interlocked.Read(ref cooldownUntil) - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             if (remaining > 0) throw new HttpRequestException($"Universalis rate limit: retry in {remaining} seconds.");
-            using var response = await http.GetAsync($"https://universalis.app/api/v2/{path}", token);
+            // ResponseHeadersRead avoids buffering an unbounded body. Keep the timeout
+            // active through streaming too; HttpClient's timeout ends at the headers.
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+            timeout.CancelAfter(http.Timeout);
+            var requestToken = timeout.Token;
+            using var response = await http.GetAsync($"https://universalis.app/api/v2/{path}", HttpCompletionOption.ResponseHeadersRead, requestToken);
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
             {
                 var wait = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow) ?? TimeSpan.FromSeconds(30);
@@ -56,7 +62,22 @@ public sealed class MarketClient : IDisposable
             }
             if (response.StatusCode == HttpStatusCode.NotFound) throw new HttpRequestException("World or item has no available market data.");
             response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadAsStringAsync(token);
+            if (response.Content.Headers.ContentLength > MaxResponseBytes)
+                throw new InvalidDataException("Market response exceeds the 16 MiB limit.");
+            using var body = new MemoryStream();
+            await using var stream = await response.Content.ReadAsStreamAsync(requestToken);
+            var buffer = new byte[81920];
+            while (true)
+            {
+                var read = await stream.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, MaxResponseBytes - (int)body.Length + 1)), requestToken);
+                if (read == 0) break;
+                if (body.Length + read > MaxResponseBytes)
+                    throw new InvalidDataException("Market response exceeds the 16 MiB limit.");
+                body.Write(buffer, 0, read);
+            }
+            using var boundedContent = new ByteArrayContent(body.ToArray());
+            boundedContent.Headers.ContentType = response.Content.Headers.ContentType;
+            var json = await boundedContent.ReadAsStringAsync(requestToken);
             // Validate JSON before retaining a successful response; identity and schema are checked by the parser.
             using var parsed = System.Text.Json.JsonDocument.Parse(json);
             if (useCache)

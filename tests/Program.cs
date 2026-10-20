@@ -4,6 +4,7 @@ using System.Text.Json;
 
 Console.WriteLine($"{await BatchRegression.Run()} batch/pipeline regressions passed.");
 Console.WriteLine($"{await DiscoveryRegression.Run()} discovery/sorting checks passed.");
+Console.WriteLine($"{await ResponseLimitRegression.Run()} HTTP response limit checks passed.");
 if (args.Contains("--discovery-live")) await LiveDiscovery.Run();
 var checks = 0;
 void Check(bool ok, string name) { if (!ok) throw new Exception(name); checks++; }

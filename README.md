@@ -25,6 +25,6 @@ Install future updates through the Dalamud plugin installer. If you previously u
 2. Select **Balanced discovery**, then click **Scan for flips**. Use a saved watchlist for familiar items or **Active market sweep** to explore more.
 3. Review expected gain, upfront cost, and selling time. Click column headings to sort and select a trade to see the exact stacks to buy. Only the suggested basket fits the combined budget.
 4. Click an item name to copy it for a market-board search. Verify the listings in game, then travel and buy manually. **Sell / unit** is the suggested listing price on your sell world.
-5. Enable purchase tracking in **Purchase journal** before buying if you want confirmed purchases recorded. After selling, select the purchase and enter the units sold and total gil received after seller tax. Sales must be recorded manually.
+5. Purchase tracking is **on by default**; check **Automatically log market-board purchases** in **Purchase journal** before buying if you previously disabled it. After selling, select the purchase and enter the units sold and total gil received after seller tax. Sales must be recorded manually.
 
 Prices are Universalis snapshots and can change. Estimates assume 5% seller tax and exclude buyer tax and travel costs. Purchases, travel, and repricing are manual. Journal records stay local and retain up to 1,000 purchases for 90 days.
