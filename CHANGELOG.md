@@ -1,9 +1,11 @@
 # Unreleased
 
+- Retry temporary HTTP 502/503/504 failures and request timeouts once with a short cancellable backoff. Keep rate-limit handling and response limits intact.
+- Separate attempted, successfully analyzed and skipped item counts in scan summaries.
 - Compact scanner: four main fields, a scan button and one collapsed settings section.
 - Pause watchlist UI and scan inputs while retaining saved lists for future work.
 - Preserve opportunity tables, basket summaries and trade details apart from removing the watchlist save button.
-- In-game visual verification of this layout is pending.
+- Compact layout confirmed in the user's in-game screenshot. Retry recovery is covered by deterministic tests; live recovery during an upstream outage remains unverified.
 
 # 0.6.1
 

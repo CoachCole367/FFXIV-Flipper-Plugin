@@ -28,7 +28,7 @@ All units in purchased stacks count toward upfront cost, even when fewer are exp
 
 The supply sample contains up to 1,000 cheapest buy-DC listings per item, separate home-world listings, and up to 2,000 home-world sales in a seven-day window. DC supply is marked sampled. Capped, failed or malformed home history is excluded. The preserved planner rejects stale/unknown-age sources and checks listing review times. Uploaded history may not cover all real trades.
 
-Skipped items are reported separately. A rate-limit stop preserves completed opportunities with a warning. Canceling or changing settings discards old results. An empty result means no supported plan passed the filters in this sample.
+The summary separates items attempted, successfully analyzed and skipped. Successful analysis can still produce no supported trade; skipped items never count as analyzed. Temporary HTTP 502/503/504 errors or request timeouts receive one retry after a 1–1.5 second pause. Each attempt has a 25-second timeout; a failed request can therefore take about 51.5 seconds in total. Cancellation interrupts the pause, and rate limits, oversized responses and invalid data are not retried. A rate-limit stop preserves completed opportunities with a warning. Canceling or changing settings discards old results. An empty result means no supported plan passed the filters in this sample.
 
 ## Purchase journal
 

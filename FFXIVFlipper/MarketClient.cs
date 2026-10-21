@@ -40,6 +40,17 @@ public sealed class MarketClient : IDisposable
     }
     private async Task<string> Get(string path, CancellationToken token, bool useCache = true)
     {
+        // Retry an idempotent GET once. Release the request slot and response before
+        // backing off; 429, invalid data and oversized bodies are never retried.
+        try { return await GetOnce(path, token, useCache); }
+        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout)
+        { token.ThrowIfCancellationRequested(); }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested) { }
+        await Task.Delay(Random.Shared.Next(1000, 1501), token);
+        return await GetOnce(path, token, useCache);
+    }
+    private async Task<string> GetOnce(string path, CancellationToken token, bool useCache)
+    {
         token.ThrowIfCancellationRequested();
         if (useCache && cache.TryGetValue(path, out var saved) && DateTimeOffset.UtcNow - saved.Time < TimeSpan.FromSeconds(30)) return saved.Json;
         await slots.WaitAsync(token);

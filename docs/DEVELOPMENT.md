@@ -35,7 +35,7 @@ The generator reads the webpage source and writes plugin fixtures; it does not e
 
 ## Validation
 
-The 0.6.0 release passed 165 checks. The maintenance build adds 17 HTTP size/cancellation checks and six journal character/export checks (188 total): 31 market, 3 source-hash, 25 browser parity, 19 scanner, 14 batching/pipeline, 34 discovery/sorting, 17 HTTP and 45 journal checks. UI character-switch behavior still requires the in-game checks below; automated journal tests do not exercise ImGui or game events.
+The 0.6.0 release passed 165 checks; 0.6.1 passed 188. The current build has 204 checks: 31 market, 3 source-hash, 25 browser parity, 21 scanner, 14 batching/pipeline, 34 discovery/sorting, 31 HTTP and 45 journal checks. HTTP coverage includes retry recovery/exhaustion, permanent errors, cancellation, size limits and cache behavior; scanner checks distinguish attempted items from completed analysis. UI character-switch behavior still requires the in-game checks below; automated journal tests do not exercise ImGui or game events.
 
 Two live runs each screened 1,000 IDs and evaluated 200 candidates. Balanced found 35 trades in 31.44s with 10 warnings; a different active-market slice found 8 in 27.67s with 21 warnings. Upstream/network failures explicitly excluded affected items. Different candidate sets and snapshot results are not a source-quality comparison or a profit guarantee.
 

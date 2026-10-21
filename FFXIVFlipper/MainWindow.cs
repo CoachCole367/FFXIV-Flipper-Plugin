@@ -109,7 +109,7 @@ public sealed class MainWindow : Window, IDisposable
             {
                 scanResult = scanTask.GetAwaiter().GetResult();
                 selectedOpportunity = scanResult.Rows.Length > 0 ? 0 : -1;
-                scanStatus = $"{scanResult.Evaluated} items checked  |  {scanResult.Rows.Length} worthwhile trades  |  {scanResult.LowValueFiltered} smaller trades filtered";
+                scanStatus = $"{scanResult.Evaluated} attempted  |  {scanResult.Analyzed} analyzed  |  {scanResult.Evaluated - scanResult.Analyzed} skipped  |  {scanResult.Rows.Length} worthwhile trades  |  {scanResult.LowValueFiltered} smaller trades filtered";
             }
             catch (OperationCanceledException) { scanStatus = "Scan canceled."; }
             catch (Exception ex) { scanStatus = $"Scan failed: {ex.Message}"; Plugin.Log.Warning(ex, "Cross-world scan failed"); }

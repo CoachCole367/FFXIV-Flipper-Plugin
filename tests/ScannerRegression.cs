@@ -47,6 +47,7 @@ public static class ScannerRegression
         {
             var result=await new CrossWorldScanner(client).Run(settings,catalog,[],_=>{},default);
             if(result.Rows.Length==0 || result.Warnings.Length!=0) throw new Exception("Synthetic automatic scanner did not recommend a supported plan.");
+            if(result.Analyzed != result.Evaluated) throw new Exception("Successful scan counts are inconsistent.");
             var row=result.Rows[0];
             var stackCost=row.GetProperty("usedListings").EnumerateArray().Sum(x=>x.GetProperty("quantity").GetDouble()*x.GetProperty("pricePerUnit").GetDouble());
             if(Math.Abs(row.GetProperty("planCost").GetDouble()-stackCost)>.001) throw new Exception("Scanner omitted full-stack capital.");
@@ -64,6 +65,7 @@ public static class ScannerRegression
         {
             var unavailable=await new CrossWorldScanner(client).Run(settings,catalog,[new(id,"Synthetic test item")],_=>{},default);
             if(unavailable.Rows.Length!=0||unavailable.Warnings.Length==0) throw new Exception("Missing history became a scanner forecast.");
+            if(unavailable.Analyzed != 0 || unavailable.Evaluated != 1) throw new Exception("Unavailable evidence counted as successful analysis.");
         }
         using(var client=new MarketClient(new Handler(_=>new(HttpStatusCode.OK){Content=new StringContent(supply.Replace("Primal","Aether"))})))
         {
@@ -80,7 +82,7 @@ public static class ScannerRegression
             var limited=await new CrossWorldScanner(client).Run(settings,catalog,[new(id,"Synthetic test item")],_=>{},default);
             if(limited.Rows.Length!=0 || !limited.Warnings.Any(x=>x.Contains("rate limit"))) throw new Exception("Rate limit did not preserve an explicit partial scan result.");
         }
-        return 19;
+        return 21;
     }
     private sealed class Handler(Func<HttpRequestMessage,HttpResponseMessage> respond):HttpMessageHandler
     {

@@ -9,6 +9,39 @@ public static class ResponseLimitRegression
         var checks = 0;
         void Check(bool value, string message) { if (!value) throw new Exception(message); checks++; }
         const string json = "{\"worldID\":53,\"itemID\":10373,\"lastUploadTime\":1,\"listings\":[]}";
+        foreach (var status in new[] { HttpStatusCode.BadGateway, HttpStatusCode.ServiceUnavailable, HttpStatusCode.GatewayTimeout })
+        {
+            var calls = 0;
+            using var client = new MarketClient(new Handler(() => ++calls == 1 ? new(status) : new(HttpStatusCode.OK) { Content = new StringContent(json) }));
+            await client.Fetch(53, 10373, false, default);
+            Check(calls == 2, "Transient server failure did not recover with one retry.");
+            await client.Fetch(53, 10373, false, default);
+            Check(calls == 2, "Recovered response was not cached.");
+        }
+        foreach (var status in new[] { HttpStatusCode.GatewayTimeout, HttpStatusCode.NotFound, HttpStatusCode.TooManyRequests, HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError })
+        {
+            var calls = 0;
+            using var client = new MarketClient(new Handler(() => { calls++; return new(status); }));
+            try { await client.Fetch(53, 10373, false, default); throw new Exception("Failed request was accepted."); }
+            catch (HttpRequestException) { }
+            Check(calls == (status == HttpStatusCode.GatewayTimeout ? 2 : 1), "Retry policy repeated a permanent error or exceeded its attempt cap.");
+        }
+        {
+            var calls = 0;
+            using var client = new MarketClient(new Handler(() => { if (++calls == 1) throw new TaskCanceledException("Simulated request timeout"); return new(HttpStatusCode.OK) { Content = new StringContent(json) }; }));
+            await client.Fetch(53, 10373, false, default);
+            Check(calls == 2, "A request timeout was not retried.");
+        }
+        {
+            var calls = 0;
+            using var cancellation = new CancellationTokenSource();
+            using var client = new MarketClient(new Handler(() => { calls++; return new(HttpStatusCode.GatewayTimeout); }));
+            var pending = client.Fetch(53, 10373, false, cancellation.Token);
+            cancellation.Cancel();
+            try { await pending; throw new Exception("Retry backoff ignored cancellation."); }
+            catch (OperationCanceledException) { checks++; }
+            Check(calls == 1, "Canceled backoff issued another request.");
+        }
         foreach (var declaredLength in new long?[] { MarketClient.MaxResponseBytes + 1L, null, 1 })
         {
             var stream = new SizedStream(MarketClient.MaxResponseBytes + 100, "");

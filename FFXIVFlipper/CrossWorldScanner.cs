@@ -3,7 +3,7 @@ namespace FFXIVFlipper;
 public sealed record ScanItem(uint Id, string Name);
 public sealed record ScanSettings(uint HomeId, string HomeWorld, string BuyDc, Dictionary<uint,string> BuyWorlds, int Budget, int ItemLimit, int HoldingDays, double Confidence, int MaxQuantity, int MinProfit, int MinExpectedProfit = 10000);
 public sealed record ScanProgress(int Completed, int Total, string Message);
-public sealed record ScanResult(JsonElement[] Rows, JsonElement Basket, int Evaluated, string[] Warnings, long FinishedAt, int LowValueFiltered = 0);
+public sealed record ScanResult(JsonElement[] Rows, JsonElement Basket, int Evaluated, string[] Warnings, long FinishedAt, int LowValueFiltered = 0, int Analyzed = 0);
 public sealed class CrossWorldScanner(MarketClient market)
 {
     public async Task<ScanResult> Run(ScanSettings settings, IReadOnlyDictionary<uint,string> catalog, ScanItem[] manual, Action<ScanProgress> progress, CancellationToken token)
@@ -13,6 +13,7 @@ public sealed class CrossWorldScanner(MarketClient market)
         if (items.Length == 0) throw new InvalidDataException("No marketable candidates available. Retry, or choose a specific item.");
         var allRows = new List<JsonElement>(); var warnings = new List<string>();
         var evaluated = 0;
+        var analyzed = 0;
 
         // Network and interpreter work stay off the game thread. Requests share the client's concurrency cap.
         using var prefetch = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -59,6 +60,7 @@ public sealed class CrossWorldScanner(MarketClient market)
                         using var engine = new PlannerEngine(token);
                         using var output = JsonDocument.Parse(engine.Run(input));
                         allRows.AddRange(output.RootElement.GetProperty("rows").EnumerateArray().Select(x => x.Clone()));
+                        analyzed++;
                     }
                     catch (OperationCanceledException) when (!token.IsCancellationRequested) { warnings.Add($"{candidate.Name}: market request timed out; item skipped."); }
                     catch (OperationCanceledException) { throw; }
@@ -103,7 +105,7 @@ public sealed class CrossWorldScanner(MarketClient market)
             basket = JsonSerializer.SerializeToElement(new { unavailable = true });
         }
         progress(new(evaluated, items.Length, "Scan complete"));
-        return new(rows, basket, evaluated, warnings.ToArray(), DateTimeOffset.UtcNow.ToUnixTimeSeconds(), lowValueFiltered);
+        return new(rows, basket, evaluated, warnings.ToArray(), DateTimeOffset.UtcNow.ToUnixTimeSeconds(), lowValueFiltered, analyzed);
     }
     // This user preference filters actionable trades, not the preserved demand calculation.
     // Apply it before basket selection so tiny trades cannot consume basket slots.
