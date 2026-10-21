@@ -41,7 +41,7 @@ $manifest.PSObject.Properties | ForEach-Object { $entry[$_.Name] = $_.Value }
 $entry['DownloadLinkInstall'] = $link
 $entry['DownloadLinkUpdate'] = $link
 $entry['LastUpdate'] = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$entry['Changelog'] = 'Bounded HTTP responses; clear stale sale reviews on character changes; character-scoped CSV export status; corrected tracking-default instructions. Two-character in-game verification remains pending.'
+$entry['Changelog'] = 'Compact scanner controls with collapsed settings; watchlists paused with saved lists preserved; one retry for temporary market failures; separate attempted, analyzed and skipped counts. Two-character in-game verification remains pending.'
 ConvertTo-Json -InputObject @($entry) -Depth 8 | Set-Content -LiteralPath (Join-Path $dist 'repo.json') -Encoding utf8
 Write-Host "Prepared $target ($((Get-Item -LiteralPath $target).Length) bytes)"
 Write-Host "SHA256: $hash"

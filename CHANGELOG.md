@@ -1,4 +1,4 @@
-# Unreleased
+# 0.6.2
 
 - Retry temporary HTTP 502/503/504 failures and request timeouts once with a short cancellable backoff. Keep rate-limit handling and response limits intact.
 - Separate attempted, successfully analyzed and skipped item counts in scan summaries.
@@ -6,6 +6,8 @@
 - Pause watchlist UI and scan inputs while retaining saved lists for future work.
 - Preserve opportunity tables, basket summaries and trade details apart from removing the watchlist save button.
 - Compact layout confirmed in the user's in-game screenshot. Retry recovery is covered by deterministic tests; live recovery during an upstream outage remains unverified.
+
+Validation: 204 automated checks pass. Two-character in-game sale-confirmation and CSV-export checks remain unverified because a second character was unavailable.
 
 # 0.6.1
 
