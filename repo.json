@@ -3,7 +3,7 @@
     "Author": "FFXIV Flipper",
     "Name": "FFXIV Flipper",
     "InternalName": "FFXIVFlipper",
-    "AssemblyVersion": "0.6.1.0",
+    "AssemblyVersion": "0.6.2.0",
     "Description": "In-game market research using Universalis. Profitable cross-world flips with home-world sell prices, exact-stack plans, budget baskets and a bounded purchase journal.",
     "ApplicableVersion": "any",
     "RepoUrl": "https://github.com/CoachCole367/FFXIV-Flipper-Plugin",
@@ -19,9 +19,9 @@
     "LoadPriority": 0,
     "Punchline": "Market research and whole-stack profit estimates.",
     "AcceptsFeedback": true,
-    "DownloadLinkInstall": "https://github.com/CoachCole367/FFXIV-Flipper-Plugin/releases/download/v0.6.1/FFXIVFlipper-0.6.1.zip",
-    "DownloadLinkUpdate": "https://github.com/CoachCole367/FFXIV-Flipper-Plugin/releases/download/v0.6.1/FFXIVFlipper-0.6.1.zip",
-    "LastUpdate": 1792532793,
-    "Changelog": "Bounded HTTP responses; clear stale sale reviews on character changes; character-scoped CSV export status; corrected tracking-default instructions. Two-character in-game verification remains pending."
+    "DownloadLinkInstall": "https://github.com/CoachCole367/FFXIV-Flipper-Plugin/releases/download/v0.6.2/FFXIVFlipper-0.6.2.zip",
+    "DownloadLinkUpdate": "https://github.com/CoachCole367/FFXIV-Flipper-Plugin/releases/download/v0.6.2/FFXIVFlipper-0.6.2.zip",
+    "LastUpdate": 1792613567,
+    "Changelog": "Compact scanner controls with collapsed settings; watchlists paused with saved lists preserved; one retry for temporary market failures; separate attempted, analyzed and skipped counts. Two-character in-game verification remains pending."
   }
 ]
